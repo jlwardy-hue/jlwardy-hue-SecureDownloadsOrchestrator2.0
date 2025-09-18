@@ -6,7 +6,6 @@ Provides structured logging with configurable levels and file output.
 
 import logging
 import logging.handlers
-import os
 from pathlib import Path
 from typing import Dict, Any, Optional
 
