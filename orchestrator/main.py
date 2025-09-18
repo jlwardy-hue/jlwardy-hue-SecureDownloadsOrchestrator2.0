@@ -9,7 +9,6 @@ import os
 from pathlib import Path
 
 # Add the parent directory to the Python path to allow imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from orchestrator.config_loader import ConfigLoader
 from orchestrator.logger import setup_logger, log_startup_info, log_shutdown_info
