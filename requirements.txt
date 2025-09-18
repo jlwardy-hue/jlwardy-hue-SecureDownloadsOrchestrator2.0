@@ -1,0 +1,20 @@
+# Core dependencies for SecureDownloadsOrchestrator 2.0
+
+# File system monitoring
+watchdog>=3.0.0
+
+# Configuration management
+pyyaml>=6.0
+
+# AI classification
+openai>=1.0.0
+
+# File type detection
+python-magic>=0.4.27
+
+# Image processing
+pillow>=10.0.0
+
+# Document processing
+pypdf2>=3.0.1
+python-docx>=0.8.11

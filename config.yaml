@@ -1,0 +1,139 @@
+# SecureDownloadsOrchestrator 2.0 Configuration
+
+# Directory Configuration
+directories:
+  # Source directory to monitor for new files
+  source: "~/Downloads"
+  
+  # Base destination directory for organized files
+  destination: "~/OrganizedFiles"
+  
+  # Temporary processing directory
+  temp: "/tmp/orchestrator"
+  
+  # Archive directory for processed files
+  archive: "~/OrganizedFiles/Archive"
+
+# File Categories and Organization Rules
+categories:
+  documents:
+    extensions: [".pdf", ".doc", ".docx", ".txt", ".rtf"]
+    destination: "Documents"
+    description: "Text documents and reports"
+  
+  images:
+    extensions: [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".svg"]
+    destination: "Images"
+    description: "Photos and graphics"
+  
+  videos:
+    extensions: [".mp4", ".avi", ".mkv", ".mov", ".wmv"]
+    destination: "Videos"
+    description: "Video files"
+  
+  audio:
+    extensions: [".mp3", ".wav", ".flac", ".aac", ".ogg"]
+    destination: "Audio"
+    description: "Music and sound files"
+  
+  archives:
+    extensions: [".zip", ".rar", ".7z", ".tar", ".gz"]
+    destination: "Archives"
+    description: "Compressed files"
+  
+  code:
+    extensions: [".py", ".js", ".html", ".css", ".java", ".cpp", ".c"]
+    destination: "Code"
+    description: "Source code files"
+  
+  spreadsheets:
+    extensions: [".xls", ".xlsx", ".csv", ".ods"]
+    destination: "Spreadsheets"
+    description: "Data and calculation files"
+
+# GPT AI Classification Settings
+gpt:
+  # OpenAI API configuration
+  api_key: ""  # Set your OpenAI API key here
+  model: "gpt-3.5-turbo"
+  max_tokens: 150
+  temperature: 0.1
+  
+  # Classification prompts
+  prompts:
+    content_analysis: |
+      Analyze the content of this file and classify it into one of these categories:
+      - personal: Personal documents, photos, private content
+      - work: Professional documents, business content
+      - finance: Financial documents, tax forms, receipts
+      - legal: Contracts, legal documents, important papers
+      - education: Study materials, courses, academic content
+      - entertainment: Games, movies, music, recreational content
+      - other: Anything that doesn't fit the above categories
+      
+      Respond with only the category name.
+    
+    security_check: |
+      Analyze this file for potential security concerns:
+      - Does it contain personal information?
+      - Could it be malicious or suspicious?
+      - Should it be flagged for manual review?
+      
+      Respond with: safe, review, or quarantine.
+
+# File Processing Settings
+processing:
+  # Maximum file size to process (in MB)
+  max_file_size: 100
+  
+  # File extensions to ignore
+  ignore_extensions: [".tmp", ".log", ".cache", ".DS_Store"]
+  
+  # Enable content-based classification (requires GPT)
+  enable_ai_classification: false
+  
+  # Enable file security scanning
+  enable_security_scan: false
+
+# Logging Configuration
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+  
+  # Log file settings
+  file:
+    enabled: true
+    path: "logs/orchestrator.log"
+    max_size_mb: 10
+    backup_count: 5
+    rotation: true
+  
+  # Console output settings
+  console:
+    enabled: true
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # Component-specific log levels
+  components:
+    file_watcher: "INFO"
+    ai_classifier: "DEBUG"
+    file_organizer: "INFO"
+    config_loader: "WARNING"
+
+# Application Settings
+application:
+  # Application name and version
+  name: "SecureDownloadsOrchestrator"
+  version: "2.0.0"
+  
+  # Startup behavior
+  startup:
+    check_directories: true
+    create_missing_dirs: true
+    validate_config: true
+  
+  # Performance settings
+  performance:
+    worker_threads: 4
+    batch_size: 10
+    processing_delay: 1.0
