@@ -167,7 +167,7 @@ def log_startup_info(logger: logging.Logger, app_config: Dict[str, Any]) -> None
     # Log configuration summary
     startup_config = app_config.get('startup', {})
     if startup_config.get('check_directories', True):
-        logger.info("Directory checking: ENABLED")
+        logger.info("Directory validation: ENABLED")
     if startup_config.get('create_missing_dirs', True):
         logger.info("Auto-create missing directories: ENABLED")
     if startup_config.get('validate_config', True):
