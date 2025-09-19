@@ -33,10 +33,6 @@ updates:
       - dependency-name: "python-magic"
         update-types: ["version-update:semver-major"]
     # Security updates have higher priority
-    security-updates:
-      enabled: true
-    vulnerability-alerts:
-      enabled: true
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
