@@ -11,6 +11,7 @@ from orchestrator.config_loader import load_config
 from orchestrator.logger import setup_logger, log_startup_info, log_shutdown_info
 from orchestrator.file_watcher import FileWatcher
 from orchestrator.classifier import classify_file
+from orchestrator.pipeline import create_unified_processor
 
 def create_directories(config: dict, logger) -> bool:
     directories = config.get("directories", {})
@@ -73,26 +74,45 @@ def validate_configuration(config: dict, logger) -> bool:
     logger.info("Configuration validation passed")
     return True
 
-def handle_new_file(filepath, logger):
+def handle_new_file(filepath, logger, config=None):
     """
     Handle newly detected or modified files.
-    Classifies the file and logs the result for future processing steps.
+    Uses the unified pipeline for comprehensive processing if enabled,
+    otherwise falls back to simple classification.
     """
     logger.info(f"Processing detected file: {filepath}")
     
-    # Classify the file using the new classifier
     try:
-        file_category = classify_file(filepath, logger)
-        logger.info(f"File classification complete: {filepath} -> {file_category}")
+        # Check if unified pipeline is enabled
+        processing_config = config.get("processing", {}) if config else {}
+        use_unified_pipeline = processing_config.get("enable_unified_pipeline", False)
         
-        # TODO: Future processing steps based on classification:
-        # - Move files to appropriate category directories
-        # - Trigger security scanning for executable files
-        # - Generate alerts for sensitive file types
-        # - Apply category-specific processing rules
+        if use_unified_pipeline:
+            # Use the new unified pipeline
+            logger.info("Using unified file processing pipeline")
+            processor = create_unified_processor(config, logger)
+            result = processor.process_file(filepath)
+            
+            if result.success:
+                logger.info(f"Pipeline processing complete: {filepath} -> {result.final_path}")
+                if result.metadata:
+                    logger.debug(f"Processing metadata: {result.metadata}")
+            else:
+                logger.error(f"Pipeline processing failed: {result.error}")
+        else:
+            # Fallback to simple classification
+            logger.info("Using simple classification (unified pipeline disabled)")
+            file_category = classify_file(filepath, logger)
+            logger.info(f"File classification complete: {filepath} -> {file_category}")
+            
+            # TODO: Future processing steps based on classification:
+            # - Move files to appropriate category directories
+            # - Trigger security scanning for executable files
+            # - Generate alerts for sensitive file types
+            # - Apply category-specific processing rules
         
     except Exception as e:
-        logger.error(f"Error during file classification: {e}")
+        logger.error(f"Error during file processing: {e}")
 
 def main():
     watcher = None
@@ -118,9 +138,9 @@ def main():
         source_dir = config.get("directories", {}).get("source")
         if source_dir:
             logger.info("Initializing file monitoring service...")
-            # Create a callback that includes the logger
+            # Create a callback that includes the logger and config
             def file_callback(filepath):
-                handle_new_file(filepath, logger)
+                handle_new_file(filepath, logger, config)
             
             watcher = FileWatcher(source_dir, file_callback, logger)
             watcher.start()
