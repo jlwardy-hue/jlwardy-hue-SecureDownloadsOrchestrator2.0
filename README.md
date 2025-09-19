@@ -77,7 +77,7 @@ SecureDownloadsOrchestrator2.0/
 
 ### 🚀 Automated Setup (Recommended)
 
-For the smoothest setup experience, use our automated setup script:
+For the smoothest setup experience, use our automated setup script which requires **zero manual steps** - all directories are created automatically:
 
 1. **Clone the repository:**
    ```bash
@@ -87,7 +87,7 @@ For the smoothest setup experience, use our automated setup script:
 
 2. **Run automated setup:**
    ```bash
-   # Quick setup (one command)
+   # Quick setup (one command - creates all directories automatically)
    ./setup.sh
    
    # Or using Python directly
@@ -104,6 +104,15 @@ For the smoothest setup experience, use our automated setup script:
    ```bash
    python -m orchestrator.main
    ```
+
+**✨ What the automated setup does:**
+- ✅ Validates Python version and dependencies
+- ✅ Installs required packages automatically
+- ✅ **Creates source and destination directories from config.yaml**
+- ✅ **Creates all category subdirectories (documents, images, etc.)**
+- ✅ Sets up logging directories
+- ✅ Validates configuration
+- ✅ **No manual directory creation required!**
 
 ### 📋 Manual Setup
 
