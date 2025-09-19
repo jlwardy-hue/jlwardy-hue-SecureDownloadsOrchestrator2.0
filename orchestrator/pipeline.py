@@ -24,6 +24,8 @@ from datetime import datetime
 from typing import Dict, Optional, Any
 import zipfile
 import tarfile
+import stat
+import time
 
 try:
     import pytesseract
@@ -50,6 +52,16 @@ class SecurityScanResult:
         self.threat_name = threat_name
         self.scan_output = scan_output
         self.scanned_at = datetime.now()
+
+
+class PathValidationError(Exception):
+    """Exception raised when path validation fails."""
+    pass
+
+
+class ArchiveBombError(Exception):
+    """Exception raised when archive bomb protection is triggered."""
+    pass
 
 
 class OCRMetadata:
@@ -98,13 +110,34 @@ class UnifiedFileProcessor:
         # Configuration paths
         self.source_dir = Path(config.get("directories", {}).get("source", ""))
         self.destination_dir = Path(config.get("directories", {}).get("destination", ""))
-        self.quarantine_dir = self.destination_dir / "quarantine"
+        # Check if quarantine directory is explicitly configured
+        quarantine_path = config.get("directories", {}).get("quarantine")
+        if quarantine_path:
+            self.quarantine_dir = Path(quarantine_path)
+        else:
+            self.quarantine_dir = self.destination_dir / "quarantine"
         
         # Processing settings
         self.processing_config = config.get("processing", {})
         self.enable_security_scan = self.processing_config.get("enable_security_scan", False)
         self.enable_ocr = self.processing_config.get("enable_ocr", True)
         self.enable_archive_extraction = self.processing_config.get("enable_archive_extraction", True)
+        
+        # Security settings
+        self.security_config = config.get("security", {})
+        self.fail_closed = self.security_config.get("fail_closed", True)  # Default to fail-closed
+        self.archive_limits = self.security_config.get("archive_limits", {
+            "max_files": 1000,  # Maximum number of files in archive
+            "max_total_size": 100 * 1024 * 1024,  # 100MB max total extracted size
+            "max_depth": 10,  # Maximum nesting depth
+            "max_file_size": 50 * 1024 * 1024  # 50MB max individual file size
+        })
+        
+        # Atomic move settings
+        self.atomic_move_config = config.get("atomic_move", {})
+        self.check_file_stability = self.atomic_move_config.get("enabled", True)
+        self.stability_check_duration = self.atomic_move_config.get("duration_seconds", 2)
+        self.stability_check_interval = self.atomic_move_config.get("check_interval", 0.5)
         
         # Create necessary directories
         self._ensure_directories()
@@ -143,6 +176,117 @@ class UnifiedFileProcessor:
         if not TESSERACT_AVAILABLE and self.enable_ocr:
             self.logger.warning("Tesseract/PIL not available - OCR disabled")
     
+    def _validate_file_path(self, filepath: str) -> None:
+        """
+        Validate file path for security concerns.
+        
+        Protects against path traversal attacks and ensures files are within
+        allowed directories.
+        
+        Args:
+            filepath: Path to validate
+            
+        Raises:
+            PathValidationError: If path validation fails
+        """
+        try:
+            # Convert to Path object for normalization
+            path = Path(filepath)
+            
+            # Check for path traversal attempts in the original string
+            if ".." in filepath or "~" in filepath:
+                raise PathValidationError(f"Path traversal detected in: {filepath}")
+            
+            # Resolve the path
+            resolved_path = path.resolve()
+            
+            # Ensure path exists and is a regular file
+            if not resolved_path.exists():
+                raise PathValidationError(f"File does not exist: {filepath}")
+            
+            if not resolved_path.is_file():
+                raise PathValidationError(f"Path is not a regular file: {filepath}")
+            
+            # Check if path is within allowed directories (source or temp)
+            allowed_parents = [
+                self.source_dir.resolve(),
+                Path(tempfile.gettempdir()).resolve()
+            ]
+            
+            path_is_allowed = False
+            for allowed_parent in allowed_parents:
+                try:
+                    resolved_path.relative_to(allowed_parent)
+                    path_is_allowed = True
+                    break
+                except ValueError:
+                    continue
+            
+            if not path_is_allowed:
+                raise PathValidationError(f"File path outside allowed directories: {filepath}")
+            
+            self.logger.debug(f"Path validation passed for: {filepath}")
+            
+        except PathValidationError:
+            # Re-raise PathValidationError as-is
+            raise
+        except Exception as e:
+            self.logger.error(f"Path validation failed for {filepath}: {e}")
+            raise PathValidationError(f"Path validation failed: {e}")
+    
+    def _check_file_stability(self, filepath: str) -> bool:
+        """
+        Check if file is stable (not being written to) before processing.
+        
+        This implements atomic move detection by monitoring file size and
+        modification time to ensure the file is completely written.
+        
+        Args:
+            filepath: Path to the file to check
+            
+        Returns:
+            bool: True if file is stable, False otherwise
+        """
+        if not self.check_file_stability:
+            return True
+        
+        try:
+            path = Path(filepath)
+            if not path.exists():
+                return False
+            
+            initial_stat = path.stat()
+            initial_size = initial_stat.st_size
+            initial_mtime = initial_stat.st_mtime
+            
+            self.logger.debug(f"Checking file stability for: {filepath}")
+            
+            # Wait and check multiple times
+            start_time = time.time()
+            while time.time() - start_time < self.stability_check_duration:
+                time.sleep(self.stability_check_interval)
+                
+                if not path.exists():
+                    self.logger.warning(f"File disappeared during stability check: {filepath}")
+                    return False
+                
+                current_stat = path.stat()
+                current_size = current_stat.st_size
+                current_mtime = current_stat.st_mtime
+                
+                if current_size != initial_size or current_mtime != initial_mtime:
+                    self.logger.debug(f"File still being modified: {filepath}")
+                    initial_size = current_size
+                    initial_mtime = current_mtime
+                    start_time = time.time()  # Reset timer
+            
+            self.logger.debug(f"File is stable: {filepath}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error checking file stability for {filepath}: {e}")
+            return False
+    
     def process_file(self, filepath: str) -> ProcessingResult:
         """
         Process a single file through the complete pipeline.
@@ -156,30 +300,40 @@ class UnifiedFileProcessor:
         try:
             self.logger.info(f"Starting pipeline processing for: {filepath}")
             
-            # Step 1: Basic file validation
-            if not os.path.isfile(filepath):
-                return ProcessingResult(False, error="File does not exist")
+            # Step 1: Path validation and security checks
+            try:
+                self._validate_file_path(filepath)
+            except PathValidationError as e:
+                self.logger.warning(f"Path validation failed, quarantining file: {e}")
+                # Create a fake scan result for quarantine
+                scan_result = SecurityScanResult(False, "PathValidationError", str(e))
+                return self._quarantine_file(filepath, scan_result)
             
-            # Step 2: Security scanning
-            if self.enable_security_scan:
+            # Step 2: File stability check (atomic move detection)
+            if not self._check_file_stability(filepath):
+                self.logger.info(f"File not stable, skipping processing: {filepath}")
+                return ProcessingResult(False, error="File not stable for processing")
+            
+            # Step 3: Security scanning with fail-closed behavior
+            if self.enable_security_scan or not self.clamav_available and self.fail_closed:
                 scan_result = self._scan_file_security(filepath)
                 if not scan_result.is_clean:
                     return self._quarantine_file(filepath, scan_result)
             
-            # Step 3: File classification
+            # Step 4: File classification
             file_category = self.classifier.classify_file(filepath)
             self.logger.info(f"File classified as: {file_category}")
             
-            # Step 4: Archive extraction (if applicable)
+            # Step 5: Archive extraction (if applicable) with bomb protection
             if file_category == "archive" and self.enable_archive_extraction:
                 return self._process_archive(filepath)
             
-            # Step 5: OCR metadata extraction (for images and PDFs)
+            # Step 6: OCR metadata extraction (for images and PDFs)
             ocr_metadata = None
             if self.enable_ocr and file_category in ["image", "pdf"]:
                 ocr_metadata = self._extract_ocr_metadata(filepath)
             
-            # Step 6: Intelligent file organization
+            # Step 7: Intelligent file organization
             final_path = self._organize_file(filepath, file_category, ocr_metadata)
             
             return ProcessingResult(True, final_path)
@@ -190,7 +344,7 @@ class UnifiedFileProcessor:
     
     def _scan_file_security(self, filepath: str) -> SecurityScanResult:
         """
-        Scan file for security threats using ClamAV.
+        Scan file for security threats using ClamAV with fail-closed behavior.
         
         Args:
             filepath: Path to file to scan
@@ -199,8 +353,12 @@ class UnifiedFileProcessor:
             SecurityScanResult: Result of the security scan
         """
         if not self.clamav_available:
-            self.logger.debug("ClamAV not available, skipping security scan")
-            return SecurityScanResult(True)
+            if self.fail_closed:
+                self.logger.warning(f"ClamAV not available, failing closed for: {filepath}")
+                return SecurityScanResult(False, "AVUnavailable", "Antivirus scanner not available")
+            else:
+                self.logger.debug("ClamAV not available, assuming clean (fail-open mode)")
+                return SecurityScanResult(True)
         
         try:
             self.logger.info(f"Security scanning file: {filepath}")
@@ -228,14 +386,26 @@ class UnifiedFileProcessor:
                 return SecurityScanResult(False, threat_name, output)
             else:
                 self.logger.error(f"ClamAV scan error for {filepath}: {output}")
-                return SecurityScanResult(True)  # Assume clean on scan error
+                if self.fail_closed:
+                    self.logger.warning(f"Scan error, failing closed for: {filepath}")
+                    return SecurityScanResult(False, "ScanError", f"Scan error: {output}")
+                else:
+                    return SecurityScanResult(True)  # Assume clean on scan error (fail-open)
                 
         except subprocess.TimeoutExpired:
             self.logger.error(f"Security scan timeout for file: {filepath}")
-            return SecurityScanResult(True)  # Assume clean on timeout
+            if self.fail_closed:
+                self.logger.warning(f"Scan timeout, failing closed for: {filepath}")
+                return SecurityScanResult(False, "ScanTimeout", "Security scan timed out")
+            else:
+                return SecurityScanResult(True)  # Assume clean on timeout (fail-open)
         except Exception as e:
             self.logger.error(f"Security scan error for {filepath}: {e}")
-            return SecurityScanResult(True)  # Assume clean on error
+            if self.fail_closed:
+                self.logger.warning(f"Scan exception, failing closed for: {filepath}")
+                return SecurityScanResult(False, "ScanException", f"Scan exception: {e}")
+            else:
+                return SecurityScanResult(True)  # Assume clean on error (fail-open)
     
     def _quarantine_file(self, filepath: str, scan_result: SecurityScanResult) -> ProcessingResult:
         """
@@ -275,7 +445,10 @@ class UnifiedFileProcessor:
     
     def _process_archive(self, filepath: str) -> ProcessingResult:
         """
-        Extract and recursively process archive contents.
+        Extract and recursively process archive contents with bomb protection.
+        
+        Implements protection against archive bombs (zip bombs, tar bombs) by
+        monitoring file count, total extracted size, and nesting depth.
         
         Args:
             filepath: Path to the archive file
@@ -284,21 +457,53 @@ class UnifiedFileProcessor:
             ProcessingResult: Result of archive processing
         """
         try:
-            self.logger.info(f"Processing archive: {filepath}")
+            self.logger.info(f"Processing archive with bomb protection: {filepath}")
             
             # Create temporary extraction directory
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_path = Path(temp_dir)
                 
-                # Extract archive based on type
-                if filepath.lower().endswith(('.zip', '.jar')):
-                    with zipfile.ZipFile(filepath, 'r') as zip_ref:
-                        zip_ref.extractall(temp_path)
-                elif filepath.lower().endswith(('.tar', '.tar.gz', '.tgz', '.tar.bz2')):
-                    with tarfile.open(filepath, 'r:*') as tar_ref:
-                        tar_ref.extractall(temp_path)
-                else:
-                    return ProcessingResult(False, error="Unsupported archive format")
+                # Extract archive with protection
+                try:
+                    if filepath.lower().endswith(('.zip', '.jar')):
+                        self._extract_zip_with_protection(filepath, temp_path)
+                    elif filepath.lower().endswith(('.tar', '.tar.gz', '.tgz', '.tar.bz2')):
+                        self._extract_tar_with_protection(filepath, temp_path)
+                    else:
+                        return ProcessingResult(False, error="Unsupported archive format")
+                except ArchiveBombError as e:
+                    self.logger.warning(f"Archive bomb detected: {filepath} - {e}")
+                    # Quarantine the archive
+                    scan_result = SecurityScanResult(False, "ArchiveBomb", str(e))
+                    return self._quarantine_file(filepath, scan_result)
+                
+                # Count extracted files and validate limits
+                total_extracted_size = 0
+                file_count = 0
+                
+                # Walk through extracted files and check limits
+                for root, dirs, files in os.walk(temp_path):
+                    depth = len(Path(root).relative_to(temp_path).parts)
+                    if depth > self.archive_limits["max_depth"]:
+                        raise ArchiveBombError(f"Archive depth {depth} exceeds limit {self.archive_limits['max_depth']}")
+                    
+                    for file in files:
+                        file_count += 1
+                        if file_count > self.archive_limits["max_files"]:
+                            raise ArchiveBombError(f"Archive file count {file_count} exceeds limit {self.archive_limits['max_files']}")
+                        
+                        file_path = Path(root) / file
+                        if file_path.exists():
+                            file_size = file_path.stat().st_size
+                            total_extracted_size += file_size
+                            
+                            if file_size > self.archive_limits["max_file_size"]:
+                                raise ArchiveBombError(f"File size {file_size} exceeds limit {self.archive_limits['max_file_size']}")
+                            
+                            if total_extracted_size > self.archive_limits["max_total_size"]:
+                                raise ArchiveBombError(f"Total extracted size {total_extracted_size} exceeds limit {self.archive_limits['max_total_size']}")
+                
+                self.logger.info(f"Archive extraction completed safely: {file_count} files, {total_extracted_size} bytes")
                 
                 # Recursively process extracted files
                 extracted_files = []
@@ -306,11 +511,14 @@ class UnifiedFileProcessor:
                     for file in files:
                         extracted_file = os.path.join(root, file)
                         try:
+                            # Validate each extracted file path
+                            self._validate_extracted_file_path(extracted_file, temp_path)
+                            
                             # Process each extracted file
                             result = self.process_file(extracted_file)
                             if result.success:
                                 extracted_files.append(result.final_path)
-                        except Exception as e:
+                        except (PathValidationError, Exception) as e:
                             self.logger.error(f"Error processing extracted file {extracted_file}: {e}")
                 
                 # Move the original archive to archives category
@@ -320,11 +528,90 @@ class UnifiedFileProcessor:
                 
                 result = ProcessingResult(True, archive_final_path)
                 result.metadata["extracted_files"] = extracted_files
+                result.metadata["total_extracted_size"] = total_extracted_size
+                result.metadata["file_count"] = file_count
                 return result
                 
+        except ArchiveBombError as e:
+            self.logger.warning(f"Archive bomb detected: {filepath} - {e}")
+            scan_result = SecurityScanResult(False, "ArchiveBomb", str(e))
+            return self._quarantine_file(filepath, scan_result)
         except Exception as e:
             self.logger.error(f"Failed to process archive {filepath}: {e}")
             return ProcessingResult(False, error=f"Archive processing failed: {e}")
+    
+    def _extract_zip_with_protection(self, filepath: str, extract_path: Path) -> None:
+        """Extract ZIP file with bomb protection."""
+        with zipfile.ZipFile(filepath, 'r') as zip_ref:
+            total_size = 0
+            file_count = 0
+            
+            # Check archive contents before extraction
+            for info in zip_ref.infolist():
+                file_count += 1
+                if file_count > self.archive_limits["max_files"]:
+                    raise ArchiveBombError(f"ZIP file count {file_count} exceeds limit")
+                
+                # Check for path traversal in archive member names
+                if ".." in info.filename or info.filename.startswith("/"):
+                    raise ArchiveBombError(f"Path traversal detected in ZIP member: {info.filename}")
+                
+                total_size += info.file_size
+                if total_size > self.archive_limits["max_total_size"]:
+                    raise ArchiveBombError(f"ZIP total size {total_size} exceeds limit")
+                
+                if info.file_size > self.archive_limits["max_file_size"]:
+                    raise ArchiveBombError(f"ZIP member size {info.file_size} exceeds limit")
+            
+            # Safe extraction
+            zip_ref.extractall(extract_path)
+    
+    def _extract_tar_with_protection(self, filepath: str, extract_path: Path) -> None:
+        """Extract TAR file with bomb protection."""
+        with tarfile.open(filepath, 'r:*') as tar_ref:
+            total_size = 0
+            file_count = 0
+            
+            # Check archive contents before extraction  
+            for member in tar_ref.getmembers():
+                file_count += 1
+                if file_count > self.archive_limits["max_files"]:
+                    raise ArchiveBombError(f"TAR file count {file_count} exceeds limit")
+                
+                # Check for path traversal
+                if ".." in member.name or member.name.startswith("/"):
+                    raise ArchiveBombError(f"Path traversal detected in TAR member: {member.name}")
+                
+                if member.isfile():
+                    total_size += member.size
+                    if total_size > self.archive_limits["max_total_size"]:
+                        raise ArchiveBombError(f"TAR total size {total_size} exceeds limit")
+                    
+                    if member.size > self.archive_limits["max_file_size"]:
+                        raise ArchiveBombError(f"TAR member size {member.size} exceeds limit")
+            
+            # Safe extraction
+            tar_ref.extractall(extract_path)
+    
+    def _validate_extracted_file_path(self, filepath: str, extraction_root: Path) -> None:
+        """Validate that extracted file path is safe and within extraction directory."""
+        try:
+            file_path = Path(filepath).resolve()
+            extract_root = extraction_root.resolve()
+            
+            # Ensure file is within extraction directory
+            file_path.relative_to(extract_root)
+            
+            # Additional checks for symlinks and special files
+            if file_path.is_symlink():
+                # Resolve symlink and ensure target is also within extraction directory
+                target = file_path.resolve()
+                target.relative_to(extract_root)
+            
+        except ValueError:
+            raise PathValidationError(f"Extracted file path outside extraction directory: {filepath}")
+        except Exception as e:
+            raise PathValidationError(f"Path validation failed for extracted file: {e}")
     
     def _extract_ocr_metadata(self, filepath: str) -> Optional[OCRMetadata]:
         """
