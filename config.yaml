@@ -1,23 +1,18 @@
 directories:
-  source: "./test_source"
-  destination: "./test_destination"
+  source: "/tmp/test_watch"
+  destination: "/tmp/test_dest"
 
 categories:
   documents:
     extensions: [".pdf", ".doc", ".docx"]
     destination: "documents"
-  images:
-    extensions: [".jpg", ".png", ".gif"]
-    destination: "images"
 
 logging:
   console:
     enabled: true
     level: "INFO"
   file:
-    enabled: true
-    path: "./logs/app.log"
-    level: "DEBUG"
+    enabled: false
 
 application:
   name: "SecureDownloadsOrchestrator"
