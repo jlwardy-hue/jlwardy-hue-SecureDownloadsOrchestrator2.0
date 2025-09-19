@@ -1,7 +1,9 @@
-import os
 import logging
-import magic
+import os
 from datetime import datetime
+
+import magic
+
 
 class FileTypeDetector:
     def __init__(self):
@@ -9,7 +11,9 @@ class FileTypeDetector:
 
     def detect_type_and_metadata(self, file_path):
         if not os.path.isfile(file_path):
-            logging.warning(f"Tried to detect file type of non-existent file: {file_path}")
+            logging.warning(
+                f"Tried to detect file type of non-existent file: {file_path}"
+            )
             return None
 
         try:
@@ -22,7 +26,7 @@ class FileTypeDetector:
                 "mime_type": mime_type,
                 "size_bytes": stat.st_size,
                 "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
-                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat()
+                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
             }
             logging.info(f"File type detected: {mime_type} | Metadata: {metadata}")
             return metadata

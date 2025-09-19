@@ -1,7 +1,9 @@
-import time
 import logging
+import time
+
+from watchdog.events import FileCreatedEvent, FileModifiedEvent, FileSystemEventHandler
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileModifiedEvent
+
 
 class NewFileHandler(FileSystemEventHandler):
     def __init__(self, on_new_file_callback, logger=None):
@@ -18,6 +20,7 @@ class NewFileHandler(FileSystemEventHandler):
         if isinstance(event, FileModifiedEvent) and not event.is_directory:
             self.logger.info(f"Detected modified file: {event.src_path}")
             self.on_new_file_callback(event.src_path)
+
 
 class FileWatcher:
     def __init__(self, watch_dir, on_new_file_callback, logger=None):
