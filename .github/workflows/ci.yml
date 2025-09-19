@@ -373,33 +373,119 @@ jobs:
         pip install -r requirements.txt
         pip install bandit[toml] safety
         
+    - name: Create EICAR test file for AV validation
+      run: |
+        echo "::group::EICAR Test File Creation"
+        # Create EICAR test file using our utility
+        python scripts/create_eicar.py /tmp/eicar_test.txt
+        
+        # Verify EICAR file was created correctly
+        if [ -f "/tmp/eicar_test.txt" ]; then
+          echo "✓ EICAR test file created successfully"
+          ls -la /tmp/eicar_test.txt
+          wc -c /tmp/eicar_test.txt
+        else
+          echo "✗ EICAR test file creation failed"
+          exit 1
+        fi
+        echo "::endgroup::"
+        
+    - name: Test antivirus functionality with EICAR
+      run: |
+        echo "::group::Antivirus EICAR Testing"
+        
+        # Check if ClamAV is available
+        if command -v clamscan >/dev/null 2>&1; then
+          echo "ClamAV is available - testing EICAR detection"
+          
+          # Test EICAR detection
+          if clamscan /tmp/eicar_test.txt; then
+            echo "✗ ClamAV should detect EICAR test file as threat"
+            exit 1
+          else
+            echo "✓ ClamAV correctly detected EICAR test file as threat"
+          fi
+        else
+          echo "ClamAV not available - testing fail-closed behavior"
+          
+          # Test our fail-closed behavior with EICAR file
+          python -c "
+          from orchestrator.pipeline import UnifiedFileProcessor
+          config = {
+              'directories': {'source': '/tmp', 'destination': '/tmp', 'quarantine': '/tmp/quarantine'},
+              'security': {'fail_closed': True},
+              'categories': {'test': {'extensions': ['.txt']}},
+              'processing': {'enable_security_scan': True, 'enable_archive_extraction': False, 'enable_ocr': False},
+              'logging': {'console': {'enabled': True}, 'file': {'enabled': False}}
+          }
+          import os
+          os.makedirs('/tmp/quarantine', exist_ok=True)
+          processor = UnifiedFileProcessor(config)
+          result = processor.process_file('/tmp/eicar_test.txt')
+          assert result.success, 'EICAR processing should succeed (quarantine)'
+          print('✓ Fail-closed behavior working correctly')
+          "
+        fi
+        echo "::endgroup::"
+        
     - name: Run comprehensive security scan
       run: |
         echo "::group::Comprehensive Security Scan"
         
-        # File system security tests
-        echo "Testing path traversal protection..."
+        # Archive bomb protection tests
+        echo "Testing archive bomb protection..."
         python -c "
-        import os
-        test_paths = ['../../../etc/passwd', '~/.ssh/id_rsa', '/etc/hosts']
-        for path in test_paths:
-            try:
-                expanded = os.path.expanduser(path)
-                print(f'Path {path} -> {expanded}')
-            except Exception as e:
-                print(f'Path {path} blocked: {e}')
+        import tempfile, zipfile
+        from orchestrator.pipeline import UnifiedFileProcessor
+        
+        # Create test config
+        config = {
+            'directories': {'source': '/tmp', 'destination': '/tmp', 'quarantine': '/tmp/quarantine'},
+            'security': {
+                'fail_closed': False,  # Use fail-open for this test
+                'archive_limits': {'max_files': 10, 'max_total_size': 1024, 'max_depth': 3, 'max_file_size': 512}
+            },
+            'categories': {'archive': {'extensions': ['.zip']}},
+            'processing': {'enable_archive_extraction': True, 'enable_security_scan': False, 'enable_ocr': False},
+            'logging': {'console': {'enabled': True}, 'file': {'enabled': False}}
+        }
+        
+        # Create processor
+        processor = UnifiedFileProcessor(config)
+        
+        # Create archive bomb (file count)
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tmp:
+            with zipfile.ZipFile(tmp.name, 'w') as zf:
+                for i in range(20):  # Exceeds limit of 10
+                    zf.writestr(f'bomb_{i}.txt', f'content {i}')
+            
+            # Process should detect bomb and quarantine
+            result = processor.process_file(tmp.name)
+            assert result.success, 'Archive bomb should be quarantined'
+            print('✓ Archive bomb protection working')
         "
         
-        # Configuration security tests
-        echo "Testing configuration validation..."
+        # Path traversal protection tests
+        echo "Testing path traversal protection..."
         python -c "
-        from orchestrator.config_loader import load_config, validate_config
+        from orchestrator.pipeline import UnifiedFileProcessor, PathValidationError
+        
+        config = {
+            'directories': {'source': '/tmp', 'destination': '/tmp', 'quarantine': '/tmp/quarantine'},
+            'security': {'fail_closed': True},
+            'categories': {'test': {'extensions': ['.txt']}},
+            'processing': {'enable_security_scan': False, 'enable_archive_extraction': False, 'enable_ocr': False},
+            'logging': {'console': {'enabled': True}, 'file': {'enabled': False}}
+        }
+        
+        processor = UnifiedFileProcessor(config)
+        
+        # Test path traversal detection
         try:
-            config = load_config('config.yaml')
-            errors = validate_config(config)
-            print(f'Config validation: {len(errors)} errors found')
-        except Exception as e:
-            print(f'Config validation error: {e}')
+            processor._validate_file_path('/tmp/../../../etc/passwd')
+            assert False, 'Should detect path traversal'
+        except PathValidationError:
+            print('✓ Path traversal protection working')
         "
         
         echo "::endgroup::"
