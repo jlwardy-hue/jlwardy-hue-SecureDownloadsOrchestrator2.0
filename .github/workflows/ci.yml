@@ -530,25 +530,25 @@ jobs:
         retention-days: 90
 
 # Summary job for status checks
-  ci-complete:
-    name: CI Pipeline Complete
-    runs-on: [self-hosted, Linux, X64]
-    needs: [deployment-ready]
-    if: always()
-    
-    steps:
-    - name: Check pipeline status
-      run: |
-        echo "::group::CI Pipeline Summary"
-        
-        if [ "${{ needs.deployment-ready.result }}" == "success" ]; then
-          echo "✅ CI Pipeline completed successfully"
-          echo "✅ All quality gates passed"
-          echo "✅ Ready for deployment"
-        else
-          echo "❌ CI Pipeline failed"
-          echo "Check individual job results for details"
-          exit 1
-        fi
-        
-        echo "::endgroup::"
+ci-complete:
+  name: CI Pipeline Complete
+  runs-on: [self-hosted, Linux, X64]
+  needs: [deployment-ready]
+  if: always()
+  
+  steps:
+  - name: Check pipeline status
+    run: |
+      echo "::group::CI Pipeline Summary"
+      
+      if [ "${{ needs.deployment-ready.result }}" == "success" ]; then
+        echo "✅ CI Pipeline completed successfully"
+        echo "✅ All quality gates passed"
+        echo "✅ Ready for deployment"
+      else
+        echo "❌ CI Pipeline failed"
+        echo "Check individual job results for details"
+        exit 1
+      fi
+      
+      echo "::endgroup::"
