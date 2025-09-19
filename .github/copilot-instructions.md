@@ -265,7 +265,7 @@ The project uses GitHub Actions with comprehensive quality gates:
 ### Time Expectations
 - **Setup verification**: ~0.2 seconds
 - **Dependency installation**: ~30 seconds (6s core + 25s dev)
-- **Basic tests**: ~0.07 seconds runtime (0.6s total with overhead)
+- **Basic tests**: ~0.6 seconds
 - **Unit tests**: ~8.3 seconds (33 tests) - NEVER CANCEL
 - **Full test suite**: ~36 seconds (63 tests) - NEVER CANCEL
 - **Security tests**: ~18 seconds (20 tests) - NEVER CANCEL
