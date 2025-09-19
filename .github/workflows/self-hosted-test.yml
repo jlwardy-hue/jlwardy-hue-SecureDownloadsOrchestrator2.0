@@ -1,0 +1,52 @@
+name: Self-Hosted Runner Test
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-self-hosted-runner:
+    runs-on: [self-hosted, Linux, X64]
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Display runner information
+      run: |
+        echo "=== Runner Information ==="
+        echo "Runner name: $RUNNER_NAME"
+        echo "Runner OS: $RUNNER_OS"
+        echo "Runner architecture: $RUNNER_ARCH"
+        echo "Workspace: $GITHUB_WORKSPACE"
+        echo "Repository: $GITHUB_REPOSITORY"
+        echo "Event name: $GITHUB_EVENT_NAME"
+        echo "Branch/Ref: $GITHUB_REF"
+        
+    - name: Display system details
+      run: |
+        echo "=== System Details ==="
+        uname -a
+        echo ""
+        echo "=== Current directory ==="
+        pwd
+        echo ""
+        echo "=== Available disk space ==="
+        df -h
+        echo ""
+        echo "=== Memory information ==="
+        free -h
+        echo ""
+        echo "=== CPU information ==="
+        lscpu | head -10
+        
+    - name: Verify repository checkout
+      run: |
+        echo "=== Repository Contents ==="
+        ls -la
+        echo ""
+        echo "=== Python version ==="
+        python3 --version || echo "Python3 not available"
+        echo ""
+        echo "=== Self-hosted runner test completed successfully ==="
