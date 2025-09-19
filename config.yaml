@@ -128,7 +128,7 @@ application:
   
   # Startup behavior
   startup:
-    validate_directories: true
+    check_directories: true
     create_missing_dirs: true
     validate_config: true
   
