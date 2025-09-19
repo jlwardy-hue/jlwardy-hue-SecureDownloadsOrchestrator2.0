@@ -87,14 +87,17 @@ For the smoothest setup experience, use our automated setup script:
 
 2. **Run automated setup:**
    ```bash
-   # Full setup with dependencies and verification
+   # Quick setup (one command)
+   ./setup.sh
+   
+   # Or using Python directly
    python scripts/setup.py
    
-   # Or create a virtual environment (recommended for development)
-   python scripts/setup.py --venv
+   # Setup with virtual environment (recommended for development)
+   ./setup.sh venv
    
-   # Or just verify current setup
-   python scripts/setup.py --verify
+   # Just verify current setup
+   ./setup.sh verify
    ```
 
 3. **Start the application:**
@@ -167,7 +170,10 @@ choco install tesseract poppler
 Verify your installation is working correctly:
 
 ```bash
-# Run verification script
+# Quick verification (bash script)
+./setup.sh verify
+
+# Or using Python directly
 python scripts/setup.py --verify
 
 # Or run basic tests
@@ -179,7 +185,10 @@ python -m pytest tests/test_import_orchestrator.py -v
 To reset to a fresh state:
 
 ```bash
-# Clean build artifacts and reset
+# Clean build artifacts and reset (bash script)
+./setup.sh clean
+
+# Or using Python directly
 python scripts/setup.py --clean
 
 # Or manual cleanup
