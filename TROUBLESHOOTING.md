@@ -134,7 +134,12 @@ cat /proc/sys/fs/inotify/max_user_watches
 cat /proc/sys/fs/inotify/max_user_instances
 
 # Increase limits if needed
-echo 'fs.inotify.max_user_watches=524288' | sudo tee -a /etc/sysctl.conf
+# Add or update the setting in /etc/sysctl.conf
+if grep -q '^fs.inotify.max_user_watches=' /etc/sysctl.conf; then
+  sudo sed -i 's/^fs.inotify.max_user_watches=.*/fs.inotify.max_user_watches=524288/' /etc/sysctl.conf
+else
+  echo 'fs.inotify.max_user_watches=524288' | sudo tee -a /etc/sysctl.conf
+fi
 sudo sysctl -p
 ```
 
