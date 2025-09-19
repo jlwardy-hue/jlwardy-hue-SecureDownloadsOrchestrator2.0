@@ -13,18 +13,26 @@ An advanced, secure, and intelligent file organization system that monitors dire
 - **Real-time File Monitoring**: Watches source directories for new and modified files using `watchdog`
 - **Intelligent File Classification**: Multi-layer classification using file extensions and magic number detection
 - **Configurable Categories**: Fully customizable file categorization rules via YAML configuration
-- **Secure File Handling**: Built-in security considerations with extensible scanning capabilities
-- **Robust Logging**: Comprehensive logging to console and files with configurable levels
+- **Secure File Handling**: Enterprise-grade security with comprehensive threat protection
+- **Robust Logging**: Comprehensive logging to console and files with automatic rotation
+
+### Security Features
+- **Antivirus Integration**: ClamAV integration with EICAR test validation and fail-closed behavior
+- **Archive Bomb Protection**: Comprehensive protection against zip/tar bombs with configurable limits
+- **Path Traversal Protection**: Advanced path validation preventing directory traversal attacks
+- **Atomic Move Detection**: File stability checking to prevent processing incomplete files
+- **Quarantine System**: Automatic isolation of suspicious files with detailed logging
+- **Log Rotation**: Automatic log rotation to prevent disk space exhaustion
 
 ### Advanced Features
 - **AI-Ready Architecture**: Extensible design for future AI-powered file classification
-- **Security Scanning Framework**: Modular security scanning system for sensitive file types
+- **Security Scanning Framework**: Modular security scanning system with configurable policies
 - **Metadata Extraction**: Automatic file metadata collection (size, creation/modification dates, MIME types)
 - **Error Recovery**: Graceful error handling and recovery mechanisms
 - **Configuration Validation**: Comprehensive configuration validation with helpful error messages
 
 ### Automation & CI/CD
-- **GitHub Actions Workflows**: Complete CI/CD pipeline with testing, linting, and deployment
+- **GitHub Actions Workflows**: Complete CI/CD pipeline with security validation and EICAR testing
 - **Automated Dependency Updates**: Dependabot integration for security updates
 - **Code Quality Enforcement**: Automated linting, type checking, and security scanning
 - **Self-Hosted Runner Support**: Optimized for self-hosted GitHub Actions runners
@@ -125,10 +133,48 @@ logging:
     enabled: true
     path: "./logs/app.log"
     level: "DEBUG"
+    rotation:
+      enabled: true
+      max_bytes: 10485760  # 10MB
+      backup_count: 5
+
+security:
+  fail_closed: true                    # Fail-closed security behavior
+  archive_limits:
+    max_files: 1000                    # Max files per archive
+    max_total_size: 104857600          # 100MB max extracted size
+    max_depth: 10                      # Max directory nesting
+    max_file_size: 52428800            # 50MB max individual file
 
 processing:
-  enable_ai_classification: false  # Future AI features
-  enable_security_scan: false      # Future security scanning
+  enable_ai_classification: false      # Future AI features
+  enable_security_scan: true           # Enable antivirus scanning
+  enable_archive_extraction: true      # Enable archive processing
+
+atomic_move:
+  enabled: true                        # Enable file stability checking
+  duration_seconds: 2                  # Check duration
+  check_interval: 0.5                  # Check frequency
+```
+
+### Security Configuration
+
+The application includes comprehensive security features that can be configured:
+
+#### Antivirus Scanning
+- **ClamAV Integration**: Automatic virus scanning with EICAR test validation
+- **Fail-Closed Behavior**: Files are quarantined when scanning fails (configurable)
+- **Quarantine System**: Automatic isolation of threats with detailed logging
+
+#### Archive Protection
+- **Bomb Protection**: Prevents resource exhaustion from malicious archives
+- **Size Limits**: Configurable limits for files, total size, and nesting depth
+- **Path Validation**: Prevents directory traversal attacks in archive contents
+
+#### File Security
+- **Path Traversal Protection**: Comprehensive validation of all file paths
+- **Atomic Move Detection**: Ensures files are completely written before processing
+- **Quarantine Logging**: Detailed logs for all security events
 ```
 
 ## 🏗️ Development

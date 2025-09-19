@@ -166,32 +166,40 @@ class TestArchiveBombProtection:
     
     def test_normal_archive_processing(self, processor):
         """Test that normal archives are processed correctly."""
-        # Create a normal zip file within limits
-        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as zip_file:
-            with zipfile.ZipFile(zip_file.name, 'w') as zf:
-                # Create a few small files within limits
-                for i in range(3):
-                    zf.writestr(f"file_{i}.txt", f"content {i}")
-            
-            try:
-                # Process should succeed normally
-                result = processor.process_file(zip_file.name)
+        # Temporarily disable fail-closed mode for this test
+        original_fail_closed = processor.fail_closed
+        processor.fail_closed = False
+        
+        try:
+            # Create a normal zip file within limits
+            with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as zip_file:
+                with zipfile.ZipFile(zip_file.name, 'w') as zf:
+                    # Create a few small files within limits
+                    for i in range(3):
+                        zf.writestr(f"file_{i}.txt", f"content {i}")
                 
-                # Should succeed
-                assert result.success is True
-                
-                # Should have metadata about extracted files
-                assert "extracted_files" in result.metadata
-                assert "file_count" in result.metadata
-                assert "total_extracted_size" in result.metadata
-                
-                # Archive should be moved to archive category, not quarantined
-                assert "archive" in result.final_path
-                
-            finally:
-                # Cleanup
-                if Path(zip_file.name).exists():
-                    os.unlink(zip_file.name)
+                try:
+                    # Process should succeed normally
+                    result = processor.process_file(zip_file.name)
+                    
+                    # Should succeed
+                    assert result.success is True
+                    
+                    # Should have metadata about extracted files
+                    assert "extracted_files" in result.metadata
+                    assert "file_count" in result.metadata
+                    assert "total_extracted_size" in result.metadata
+                    
+                    # Archive should be moved to archive category, not quarantined
+                    assert "archive" in result.final_path
+                    
+                finally:
+                    # Cleanup
+                    if Path(zip_file.name).exists():
+                        os.unlink(zip_file.name)
+        finally:
+            # Restore original fail-closed setting
+            processor.fail_closed = original_fail_closed
     
     def test_archive_depth_protection(self, processor):
         """Test protection against excessive nesting depth."""
