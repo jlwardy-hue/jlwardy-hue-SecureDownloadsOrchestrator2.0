@@ -238,6 +238,8 @@ rm -rf __pycache__ .pytest_cache logs/*.log
 #### Getting Help
 
 1. **Run diagnostics:** `python scripts/setup.py --verify`
+2. **Check comprehensive troubleshooting guide:** [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+3. **Review deployment documentation:** [DEPLOYMENT.md](DEPLOYMENT.md)
 2. **Check logs:** Look in `logs/app.log` for detailed error messages
 3. **Test imports:** `python -c "from orchestrator.main import main; print('✓ OK')"`
 4. **Validate config:** `python -c "from orchestrator.config_loader import load_config; print('✓ Config OK')"`
@@ -246,6 +248,41 @@ For additional help, please open an issue with:
 - Output of `python scripts/setup.py --verify`
 - Your operating system and Python version
 - Complete error messages from logs
+
+## 🚀 Production Deployment
+
+For production environments, additional considerations apply beyond basic setup:
+
+### 📋 Production Requirements
+
+- **ClamAV Integration**: Install ClamAV for security scanning
+  ```bash
+  # Ubuntu/Debian
+  sudo apt install clamav clamav-daemon clamav-freshclam
+  sudo systemctl enable clamav-daemon clamav-freshclam
+  sudo freshclam  # Update virus definitions
+  ```
+
+- **System Service**: Set up as systemd service for auto-start and monitoring
+- **Security Hardening**: Configure fail-closed security, proper permissions
+- **Monitoring**: Log rotation, disk space monitoring, performance metrics
+- **Backup Strategy**: Regular backup of configuration and organized files
+
+### 🔗 Production Documentation
+
+📖 **[DEPLOYMENT.md](DEPLOYMENT.md)** - Complete production deployment guide covering:
+- System requirements and dependencies
+- Security configuration and hardening  
+- Service setup with systemd
+- Monitoring and maintenance procedures
+- Scaling and performance optimization
+- Backup and recovery procedures
+
+🔧 **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Comprehensive troubleshooting guide with:
+- Common error scenarios and solutions
+- Performance troubleshooting steps
+- Log analysis and debugging techniques
+- Emergency recovery procedures
 
 ### Configuration
 
