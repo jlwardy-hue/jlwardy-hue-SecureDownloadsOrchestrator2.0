@@ -334,9 +334,14 @@ if ! systemctl is-active --quiet secure-orchestrator; then
 fi
 
 # Check disk space
-usage=$(df /data | awk 'NR==2{print $5}' | sed 's/%//g')
-if [ $usage -gt 90 ]; then
-    echo "CRITICAL: Disk usage is ${usage}%" | \
+# Use a robust method to get disk usage percentage
+if usage=$(df --output=pcent /data 2>/dev/null | tail -n 1 | tr -d ' %'); then
+    if [ "$usage" -gt 90 ]; then
+        echo "CRITICAL: Disk usage is ${usage}%" | \
+        mail -s "SecureOrchestrator Disk Alert" admin@example.com
+    fi
+else
+    echo "WARNING: Could not determine disk usage (df --output=pcent not supported?)" | \
     mail -s "SecureOrchestrator Disk Alert" "$ALERT_EMAIL"
 fi
 ```
