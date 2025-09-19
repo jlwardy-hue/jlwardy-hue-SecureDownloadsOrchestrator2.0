@@ -1,0 +1,31 @@
+directories:
+  source: "./test_source"
+  destination: "./test_destination"
+
+categories:
+  documents:
+    extensions: [".pdf", ".doc", ".docx"]
+    destination: "documents"
+  images:
+    extensions: [".jpg", ".png", ".gif"]
+    destination: "images"
+
+logging:
+  console:
+    enabled: true
+    level: "INFO"
+  file:
+    enabled: true
+    path: "./logs/app.log"
+    level: "DEBUG"
+
+application:
+  name: "SecureDownloadsOrchestrator"
+  version: "2.0"
+  startup:
+    validate_config: true
+    create_missing_dirs: true
+
+processing:
+  enable_ai_classification: false
+  enable_security_scan: false
