@@ -13,7 +13,7 @@ Always reference these instructions first and fallback to search or bash command
    pip install -r requirements.txt
    pip install -r requirements-dev.txt
    ```
-   - Takes ~30 seconds. NEVER CANCEL. Set timeout to 180+ seconds.
+   - Takes ~30 seconds total (~6s core + ~25s dev). NEVER CANCEL. Set timeout to 180+ seconds.
    - Installs core dependencies (watchdog, PyYAML, python-magic, pytesseract, Pillow, pdf2image)
    - Installs dev dependencies (pytest, black, flake8, mypy, isort, bandit, safety, sphinx)
 
@@ -23,7 +23,7 @@ Always reference these instructions first and fallback to search or bash command
    # OR
    python scripts/setup.py --verify
    ```
-   - Takes ~1 second. Validates Python version, dependencies, and configuration.
+   - Takes ~0.2 seconds. Validates Python version, dependencies, and configuration.
 
 3. **Run tests:**
    ```bash
@@ -50,12 +50,14 @@ black orchestrator/ main.py
 # Fix import sorting (takes ~0.2 seconds)
 isort orchestrator/ main.py
 
-# Check linting (takes ~0.4 seconds)
+# Check linting (takes ~0.45 seconds)
 flake8 orchestrator/ main.py --statistics --count
 
-# Check type hints (takes ~0.6 seconds)
+# Check type hints (takes ~2.6 seconds) - NEVER CANCEL, much slower than other tools
 mypy orchestrator/ main.py --show-error-codes --show-error-context
 ```
+
+**CRITICAL**: Set timeout to 30+ seconds for MyPy. It takes 4x longer than documented and may appear to hang.
 
 **Known linting issues that are acceptable:**
 - Flake8: Some complexity warnings (C901) for existing complex functions
@@ -116,9 +118,16 @@ After making changes, ALWAYS test the complete workflow:
    echo "test content" > /tmp/test_watch/test.txt
    echo "print('hello')" > /tmp/test_watch/script.py
    
+   # Wait for processing (files may be quarantined if ClamAV unavailable)
+   sleep 3
+   
    # Verify directory structure is created
    ls -la /tmp/test_dest/
    # Should show: documents, code, images, audio, video, archives, executables, quarantine
+   
+   # Check quarantine directory (files go here when security scanning fails-closed)
+   ls -la /tmp/test_dest/quarantine/
+   # May contain quarantined files if ClamAV is not available
    ```
 
 4. **Always run all quality checks:**
@@ -130,16 +139,40 @@ After making changes, ALWAYS test the complete workflow:
    pytest
    ```
 
-**Note**: File monitoring and organization works in real-time. The application creates category directories automatically and monitors for file system events.
+5. **Validate application functionality:**
+   ```bash
+   # Check quarantine logs to understand file processing
+   cat /tmp/test_dest/quarantine/*.log
+   
+   # Verify directory structure was created correctly
+   ls -la /tmp/test_dest/
+   # Expected: archives, audio, code, documents, executables, images, quarantine, video
+   
+   # Application working correctly if:
+   # - All category directories are created
+   # - Files are moved to quarantine with explanatory logs
+   # - Logs show "File monitoring service started successfully"
+   ```
+
+**Note**: File monitoring and organization works in real-time. The application creates category directories automatically and monitors for file system events. 
+
+**IMPORTANT SECURITY BEHAVIOR**: Files may be quarantined in `/tmp/test_dest/quarantine/` if security scanning is enabled but ClamAV is not available (fail-closed behavior). This is expected and secure. Each quarantined file will have a corresponding `.log` file explaining why it was quarantined.
+
+To test normal file organization, either:
+1. Install ClamAV: `sudo apt install clamav` 
+2. Or check that quarantine logs indicate files are being processed correctly
 
 ### Security Testing
 ```bash
-# Run security-specific tests (takes ~5 seconds)
+# Run security-specific tests (takes ~18 seconds) - NEVER CANCEL
 pytest tests/security/ -v
 
-# Run security scanning
+# Run security scanning (takes ~0.3 seconds)
 bandit -r orchestrator/ -f txt
+
+# Run dependency scanning - REQUIRES NETWORK ACCESS
 safety check
+# Note: safety check may fail in sandboxed or offline environments
 ```
 
 ## Common Tasks
@@ -225,16 +258,33 @@ The project uses GitHub Actions with comprehensive quality gates:
 - **Permission errors**: Ensure write access to destination directories
 - **OCR not working**: Install tesseract-ocr and poppler-utils
 - **CI failures**: Always run `black`, `isort`, `flake8`, and `pytest` before committing
+- **Security scanning network errors**: `safety check` requires internet access and may fail in sandboxed environments
+- **Files quarantined unexpectedly**: Check if ClamAV is installed; without it, security scanning fails closed and quarantines all files
+- **Slow MyPy execution**: Type checking takes ~2.6 seconds, significantly longer than other linting tools
 
 ### Time Expectations
-- **Setup verification**: ~1 second
-- **Dependency installation**: ~30 seconds
-- **Basic tests**: ~0.4 seconds (7 tests)
-- **Unit tests**: ~8.5 seconds (33 tests)  
-- **Full test suite**: ~36 seconds (63 tests)
+- **Setup verification**: ~0.2 seconds
+- **Dependency installation**: ~30 seconds (6s core + 25s dev)
+- **Basic tests**: ~0.6 seconds
+- **Unit tests**: ~8.3 seconds (33 tests) - NEVER CANCEL
+- **Full test suite**: ~36 seconds (63 tests) - NEVER CANCEL
+- **Security tests**: ~18 seconds (20 tests) - NEVER CANCEL
 - **Code formatting**: ~0.6 seconds
-- **Linting checks**: ~0.4 seconds
-- **Type checking**: ~0.6 seconds
+- **Import sorting**: ~0.2 seconds  
+- **Linting checks**: ~0.45 seconds
+- **Type checking**: ~2.6 seconds (much longer than other tools)
+- **Security scanning**: ~0.3 seconds (bandit)
 - **Application startup**: ~0.2 seconds
 
-NEVER CANCEL any build or test commands. All operations complete in under 1 minute.
+NEVER CANCEL any build or test commands. Most operations complete in under 1 minute, but security tests may take up to 20 seconds.
+
+## Critical Timeout Warnings
+
+**NEVER CANCEL these commands** - they may appear to hang but are working:
+
+- **MyPy type checking**: Takes ~2.6 seconds (4x longer than other linting tools) - set timeout to 30+ seconds
+- **Security tests**: Take ~18 seconds (not 5 as initially expected) - set timeout to 60+ seconds  
+- **Full test suite**: Takes ~36 seconds - set timeout to 120+ seconds
+- **Dependency installation**: Takes ~30 seconds total - set timeout to 180+ seconds
+
+If a command appears stuck, wait at least the expected time + 50% buffer before investigating.
