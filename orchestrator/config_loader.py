@@ -213,4 +213,3 @@ def get_logging_config(config):
     logging_cfg.setdefault("console", {"enabled": True, "level": "INFO"})
     logging_cfg.setdefault("file", {"enabled": True, "path": "./logs/app.log", "level": "INFO"})
     return logging_cfg
-                                       main
