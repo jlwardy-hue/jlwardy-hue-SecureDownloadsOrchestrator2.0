@@ -241,7 +241,10 @@ ps aux | grep orchestrator | awk '{print $6}'
 watch "ls /data/incoming | wc -l; ls /data/organized/quarantine | wc -l"
 
 # Check for memory leaks
-valgrind --tool=massif python -m orchestrator.main &
+valgrind --tool=massif python -m orchestrator.main & VAL_PID=$!
+echo "Valgrind started in background with PID $VAL_PID"
+# When finished, stop valgrind with:
+kill $VAL_PID
 ```
 
 #### Solutions
