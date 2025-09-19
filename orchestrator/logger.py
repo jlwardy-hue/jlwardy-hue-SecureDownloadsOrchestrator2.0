@@ -210,4 +210,3 @@ def setup_logger(name, config):
         logger.addHandler(fh)
 
     return logger
- main
