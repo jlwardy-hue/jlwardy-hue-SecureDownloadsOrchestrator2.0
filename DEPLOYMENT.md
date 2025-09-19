@@ -314,24 +314,30 @@ Create `/opt/secure-orchestrator/monitoring.sh`:
 #!/bin/bash
 # monitoring.sh - Send alerts for critical events
 
+# Ensure ALERT_EMAIL is set
+if [ -z "$ALERT_EMAIL" ]; then
+    echo "ERROR: ALERT_EMAIL environment variable is not set. Exiting." >&2
+    exit 1
+fi
+
 # Check for high quarantine activity
 quarantine_count=$(find /data/organized/quarantine -name "*.log" -mtime -1 | wc -l)
 if [ $quarantine_count -gt 10 ]; then
     echo "ALERT: High quarantine activity - $quarantine_count files quarantined in 24h" | \
-    mail -s "SecureOrchestrator Alert" admin@example.com
+    mail -s "SecureOrchestrator Alert" "$ALERT_EMAIL"
 fi
 
 # Check service health
 if ! systemctl is-active --quiet secure-orchestrator; then
     echo "CRITICAL: SecureOrchestrator service is down" | \
-    mail -s "SecureOrchestrator CRITICAL" admin@example.com
+    mail -s "SecureOrchestrator CRITICAL" "$ALERT_EMAIL"
 fi
 
 # Check disk space
 usage=$(df /data | awk 'NR==2{print $5}' | sed 's/%//g')
 if [ $usage -gt 90 ]; then
     echo "CRITICAL: Disk usage is ${usage}%" | \
-    mail -s "SecureOrchestrator Disk Alert" admin@example.com
+    mail -s "SecureOrchestrator Disk Alert" "$ALERT_EMAIL"
 fi
 ```
 
