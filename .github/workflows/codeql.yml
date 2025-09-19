@@ -71,12 +71,6 @@ jobs:
         category: "/language:${{matrix.language}}"
         
     # Additional security scanning steps
-    - name: Upload CodeQL results to GitHub
-      uses: github/codeql-action/upload-sarif@v2
-      if: always()
-      with:
-        sarif_file: ../results/
-        
     - name: Security scan summary
       if: always()
       run: |
