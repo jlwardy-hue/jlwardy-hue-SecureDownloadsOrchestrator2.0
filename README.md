@@ -75,7 +75,9 @@ SecureDownloadsOrchestrator2.0/
 - pip package manager
 - Git (for cloning the repository)
 
-### Quick Start
+### 🚀 Automated Setup (Recommended)
+
+For the smoothest setup experience, use our automated setup script:
 
 1. **Clone the repository:**
    ```bash
@@ -83,7 +85,40 @@ SecureDownloadsOrchestrator2.0/
    cd jlwardy-hue-SecureDownloadsOrchestrator2.0
    ```
 
-2. **Install dependencies:**
+2. **Run automated setup:**
+   ```bash
+   # Full setup with dependencies and verification
+   python scripts/setup.py
+   
+   # Or create a virtual environment (recommended for development)
+   python scripts/setup.py --venv
+   
+   # Or just verify current setup
+   python scripts/setup.py --verify
+   ```
+
+3. **Start the application:**
+   ```bash
+   python -m orchestrator.main
+   ```
+
+### 📋 Manual Setup
+
+If you prefer manual setup or need to troubleshoot:
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/jlwardy-hue/jlwardy-hue-SecureDownloadsOrchestrator2.0.git
+   cd jlwardy-hue-SecureDownloadsOrchestrator2.0
+   ```
+
+2. **Create virtual environment (recommended):**
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. **Install dependencies:**
    ```bash
    # Production dependencies
    pip install -r requirements.txt
@@ -92,13 +127,13 @@ SecureDownloadsOrchestrator2.0/
    pip install -r requirements-dev.txt
    ```
 
-3. **Configure the application:**
+4. **Configure the application:**
    ```bash
    # Edit config.yaml to set your source and destination directories
    nano config.yaml
    ```
 
-4. **Run the application:**
+5. **Run the application:**
    ```bash
    # Recommended: Using the module directly (no PYTHONPATH needed)
    python -m orchestrator.main
@@ -106,6 +141,93 @@ SecureDownloadsOrchestrator2.0/
    # Alternative: Using the compatibility entry point
    python main.py
    ```
+
+### 🔧 Optional System Dependencies
+
+For enhanced functionality, install these optional system packages:
+
+```bash
+# Ubuntu/Debian
+sudo apt update
+sudo apt install tesseract-ocr poppler-utils
+
+# macOS
+brew install tesseract poppler
+
+# Windows (via Chocolatey)
+choco install tesseract poppler
+```
+
+**What these enable:**
+- **tesseract-ocr**: OCR text extraction for document metadata
+- **poppler-utils**: PDF to image conversion for OCR processing
+
+### ✅ Verification
+
+Verify your installation is working correctly:
+
+```bash
+# Run verification script
+python scripts/setup.py --verify
+
+# Or run basic tests
+python -m pytest tests/test_import_orchestrator.py -v
+```
+
+### 🔄 Cleanup and Reset
+
+To reset to a fresh state:
+
+```bash
+# Clean build artifacts and reset
+python scripts/setup.py --clean
+
+# Or manual cleanup
+rm -rf __pycache__ .pytest_cache logs/*.log
+```
+
+### 🆘 Troubleshooting
+
+#### Common Issues
+
+**❌ "No module named 'orchestrator'"**
+- Ensure you're running from the repository root directory
+- Verify Python path: `python -c "import sys; print('\n'.join(sys.path))"`
+- Try: `python -m pip install -e .` (development install)
+
+**❌ "Permission denied" on directories**
+- Check that source/destination directories have correct permissions
+- On Unix systems: `chmod 755 /path/to/directories`
+
+**❌ "Missing dependencies" after pip install**
+- Update pip: `python -m pip install --upgrade pip`
+- Try installing individually: `pip install watchdog PyYAML python-magic`
+- On Ubuntu: `sudo apt install python3-dev libmagic1`
+
+**❌ "Configuration validation failed"**
+- Verify `config.yaml` syntax with: `python -c "import yaml; yaml.safe_load(open('config.yaml'))"`
+- Check file permissions on `config.yaml`
+- Ensure source/destination paths exist or can be created
+
+**⚠️ OCR features disabled**
+- Install tesseract: See "Optional System Dependencies" above
+- Verify installation: `tesseract --version`
+
+**⚠️ PDF processing disabled**
+- Install poppler: See "Optional System Dependencies" above
+- Verify installation: `pdftoppm -h`
+
+#### Getting Help
+
+1. **Run diagnostics:** `python scripts/setup.py --verify`
+2. **Check logs:** Look in `logs/app.log` for detailed error messages
+3. **Test imports:** `python -c "from orchestrator.main import main; print('✓ OK')"`
+4. **Validate config:** `python -c "from orchestrator.config_loader import load_config; print('✓ Config OK')"`
+
+For additional help, please open an issue with:
+- Output of `python scripts/setup.py --verify`
+- Your operating system and Python version
+- Complete error messages from logs
 
 ### Configuration
 
