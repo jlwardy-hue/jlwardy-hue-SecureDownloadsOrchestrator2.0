@@ -1,0 +1,91 @@
+version: 2
+updates:
+  # Python dependencies (pip)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    target-branch: "develop"
+    reviewers:
+      - "jlwardy-hue"
+    assignees:
+      - "jlwardy-hue"
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps-dev"
+      include: "scope"
+    pull-request-branch-name:
+      separator: "/"
+    labels:
+      - "dependencies"
+      - "python"
+    open-pull-requests-limit: 5
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    ignore:
+      # Ignore major version updates for stable dependencies
+      - dependency-name: "PyYAML"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "python-magic"
+        update-types: ["version-update:semver-major"]
+    # Security updates have higher priority
+    security-updates:
+      enabled: true
+    vulnerability-alerts:
+      enabled: true
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "09:00"
+      timezone: "UTC"
+    target-branch: "develop"
+    reviewers:
+      - "jlwardy-hue"
+    assignees:
+      - "jlwardy-hue"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    pull-request-branch-name:
+      separator: "/"
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "ci/cd"
+    open-pull-requests-limit: 3
+    allow:
+      - dependency-type: "direct"
+
+  # Development dependencies (separate schedule)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      day: "monday"
+      time: "10:00"
+      timezone: "UTC"
+    target-branch: "develop"
+    reviewers:
+      - "jlwardy-hue"
+    commit-message:
+      prefix: "deps-dev"
+      include: "scope"
+    pull-request-branch-name:
+      separator: "/"
+    labels:
+      - "dependencies"
+      - "development"
+    open-pull-requests-limit: 3
+    # Only development dependencies
+    ignore:
+      - dependency-name: "watchdog"
+      - dependency-name: "PyYAML" 
+      - dependency-name: "python-magic"

@@ -26,6 +26,23 @@ MANIFEST
 *.manifest
 *.spec
 
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.cache
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+junit-*.xml
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
 # Logs
 logs/
 *.log
@@ -55,7 +72,22 @@ venv.bak/
 ehthumbs.db
 Thumbs.db
 
-# Test directories
+# Application specific
 test_source/
 test_destination/
 /tmp/
+
+# CI/CD artifacts
+deployment-package/
+*.tar.gz
+build-artifacts/
+test-results*/
+security-scan-results/
+dependency-scan-results/
+documentation/
+deployment-manifest/
+runner-health-report*.txt
+
+# Backup files
+*.bak
+*.backup
