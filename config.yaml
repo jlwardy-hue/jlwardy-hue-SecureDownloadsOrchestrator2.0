@@ -42,3 +42,6 @@ application:
 processing:
   enable_ai_classification: false
   enable_security_scan: false
+  enable_ocr: true
+  enable_archive_extraction: true
+  enable_unified_pipeline: true
