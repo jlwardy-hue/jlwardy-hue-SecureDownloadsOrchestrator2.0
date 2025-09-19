@@ -298,7 +298,9 @@ class SetupManager:
                             self.issues.append(
                                 f"Failed to create directory {kind} ({dir_path}): {e}"
                             )
-                            return False
+                # After attempting all, check if any issues occurred
+                if self.issues:
+                    return False
 
                 # Create category destination dirs
                 categories = config.get("categories", {})
