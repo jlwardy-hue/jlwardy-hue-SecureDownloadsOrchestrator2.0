@@ -5,9 +5,11 @@ Loads configuration, sets up logging, and manages application startup.
 """
 
 import sys
+import time
 from pathlib import Path
 from orchestrator.config_loader import load_config
 from orchestrator.logger import setup_logger, log_startup_info, log_shutdown_info
+from orchestrator.file_watcher import FileWatcher
 
 def create_directories(config: dict, logger) -> bool:
     directories = config.get("directories", {})
@@ -70,10 +72,20 @@ def validate_configuration(config: dict, logger) -> bool:
     logger.info("Configuration validation passed")
     return True
 
+def handle_new_file(filepath, logger):
+    """
+    Handle newly detected or modified files.
+    This is a sample implementation that logs the detected file path.
+    Later this will be replaced by classification/scanning logic.
+    """
+    logger.info(f"Processing detected file: {filepath}")
+    # TODO: Add file classification and security scanning logic here
+
 def main():
+    watcher = None
     try:
         config = load_config("config.yaml")
-        logger = setup_logger("orchestrator", config.get("logging", {}), force=True)
+        logger = setup_logger("orchestrator", config.get("logging", {}))
         app_cfg = config.get("application", {})
         log_startup_info(logger, app_cfg)
         startup_cfg = app_cfg.get("startup", {})
@@ -86,11 +98,32 @@ def main():
                 logger.error("Failed to create required directories. Exiting.")
                 sys.exit(1)
         display_configuration_summary(config, logger)
+        
+        # Initialize and start file watcher
+        source_dir = config.get("directories", {}).get("source")
+        if source_dir:
+            logger.info("Initializing file monitoring service...")
+            # Create a callback that includes the logger
+            def file_callback(filepath):
+                handle_new_file(filepath, logger)
+            
+            watcher = FileWatcher(source_dir, file_callback, logger)
+            watcher.start()
+            logger.info("File monitoring service started successfully")
+        else:
+            logger.warning("No source directory configured - file monitoring disabled")
+        
         logger.info("SecureDownloadsOrchestrator initialized successfully")
         logger.info("Ready for modular expansion...")
-        logger.info("Current status: Foundation complete - awaiting file monitoring and AI modules")
-        logger.info("Application startup test completed successfully")
-        log_shutdown_info(logger)
+        logger.info("Current status: Foundation complete - file monitoring active")
+        
+        # Keep the application running
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            logger.info("Received shutdown signal...")
+        
     except FileNotFoundError as e:
         print(f"Error: {e}")
         print("Make sure config.yaml exists in the project root directory.")
@@ -98,6 +131,11 @@ def main():
     except Exception as e:
         print(f"Unexpected error during startup: {e}")
         sys.exit(1)
+    finally:
+        if watcher:
+            logger.info("Shutting down file monitoring service...")
+            watcher.stop()
+        log_shutdown_info(logger)
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,26 @@
+directories:
+  source: "/tmp/test_watch"
+  destination: "/tmp/test_dest"
+
+categories:
+  documents:
+    extensions: [".pdf", ".doc", ".docx"]
+    destination: "documents"
+
+logging:
+  console:
+    enabled: true
+    level: "INFO"
+  file:
+    enabled: false
+
+application:
+  name: "SecureDownloadsOrchestrator"
+  version: "2.0"
+  startup:
+    validate_config: true
+    create_missing_dirs: true
+
+processing:
+  enable_ai_classification: false
+  enable_security_scan: false
