@@ -230,7 +230,7 @@ class TestUnifiedFileProcessor:
         ocr_metadata = OCRMetadata()
         ocr_metadata.business_context = "invoice"
         ocr_metadata.sender = "john@example.com"
-        ocr_metadata.date_detected = processor._extract_structured_metadata.__func__(processor, ocr_metadata)
+        processor._extract_structured_metadata.__func__(processor, ocr_metadata)
         
         # Test organization
         final_path = processor._organize_file(str(test_file), "documents", ocr_metadata)
