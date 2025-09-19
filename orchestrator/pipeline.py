@@ -543,7 +543,10 @@ class UnifiedFileProcessor:
             self.logger.error(f"Failed to organize file {filepath}: {e}")
             # Fallback: move to category directory with original name
             try:
-                fallback_dest = self.destination_dir / base_dest / filename
+                # Recompute destination directory as in main logic
+                category_config = self.config.get('categories', {}).get(category, {})
+                fallback_base_dest = category_config.get('destination', category)
+                fallback_dest = self.destination_dir / fallback_base_dest / filename
                 fallback_dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(filepath, fallback_dest)
                 return str(fallback_dest)
