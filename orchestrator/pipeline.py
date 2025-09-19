@@ -21,10 +21,9 @@ import tempfile
 import subprocess
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, Optional, Any
 import zipfile
 import tarfile
-import magic
 
 try:
     import pytesseract
@@ -411,11 +410,10 @@ class UnifiedFileProcessor:
             match = re.search(pattern, text)
             if match:
                 try:
-                    date_str = match.group(1)
                     # Attempt to parse the date (simplified)
                     metadata.date_detected = datetime.now()  # Placeholder
                     break
-                except:
+                except Exception:
                     continue
         
         # Sender extraction (email addresses, names)
