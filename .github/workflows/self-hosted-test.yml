@@ -277,7 +277,7 @@ jobs:
         echo "::endgroup::"
         
     - name: Upload runner report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: runner-health-report-${{ github.run_number }}
         path: runner-health-report.txt
