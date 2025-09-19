@@ -4,8 +4,26 @@ directories:
 
 categories:
   documents:
-    extensions: [".pdf", ".doc", ".docx"]
+    extensions: [".pdf", ".doc", ".docx", ".txt", ".rtf", ".odt"]
     destination: "documents"
+  images:
+    extensions: [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".svg", ".webp"]
+    destination: "images"
+  audio:
+    extensions: [".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a"]
+    destination: "audio"
+  video:
+    extensions: [".mp4", ".avi", ".mkv", ".mov", ".wmv", ".webm"]
+    destination: "video"
+  archives:
+    extensions: [".zip", ".rar", ".7z", ".tar", ".gz", ".tar.gz"]
+    destination: "archives"
+  code:
+    extensions: [".py", ".js", ".html", ".css", ".java", ".cpp", ".json", ".xml"]
+    destination: "code"
+  executables:
+    extensions: [".exe", ".msi", ".dmg", ".deb", ".rpm"]
+    destination: "executables"
 
 logging:
   console:

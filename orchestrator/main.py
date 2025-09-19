@@ -10,6 +10,7 @@ from pathlib import Path
 from orchestrator.config_loader import load_config
 from orchestrator.logger import setup_logger, log_startup_info, log_shutdown_info
 from orchestrator.file_watcher import FileWatcher
+from orchestrator.classifier import classify_file
 
 def create_directories(config: dict, logger) -> bool:
     directories = config.get("directories", {})
@@ -75,16 +76,30 @@ def validate_configuration(config: dict, logger) -> bool:
 def handle_new_file(filepath, logger):
     """
     Handle newly detected or modified files.
-    This is a sample implementation that logs the detected file path.
-    Later this will be replaced by classification/scanning logic.
+    Classifies the file and logs the result for future processing steps.
     """
     logger.info(f"Processing detected file: {filepath}")
-    # TODO: Add file classification and security scanning logic here
+    
+    # Classify the file using the new classifier
+    try:
+        file_category = classify_file(filepath, logger)
+        logger.info(f"File classification complete: {filepath} -> {file_category}")
+        
+        # TODO: Future processing steps based on classification:
+        # - Move files to appropriate category directories
+        # - Trigger security scanning for executable files
+        # - Generate alerts for sensitive file types
+        # - Apply category-specific processing rules
+        
+    except Exception as e:
+        logger.error(f"Error during file classification: {e}")
 
 def main():
     watcher = None
     try:
-        config = load_config("config.yaml")
+        # Allow config file to be specified as command line argument
+        config_file = sys.argv[1] if len(sys.argv) > 1 else "config.yaml"
+        config = load_config(config_file)
         logger = setup_logger("orchestrator", config.get("logging", {}))
         app_cfg = config.get("application", {})
         log_startup_info(logger, app_cfg)
