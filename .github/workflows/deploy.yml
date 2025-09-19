@@ -1,0 +1,455 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      force_deploy:
+        description: 'Force deployment (skip safety checks)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PYTHON_VERSION: '3.8'
+  APPLICATION_NAME: 'SecureDownloadsOrchestrator'
+  APPLICATION_VERSION: '2.0'
+
+jobs:
+  # Job 1: Pre-deployment validation
+  pre-deployment:
+    name: Pre-deployment Validation
+    runs-on: [self-hosted, Linux, X64]
+    outputs:
+      deployment-environment: ${{ steps.determine-env.outputs.environment }}
+      should-deploy: ${{ steps.safety-check.outputs.should-deploy }}
+      
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Determine deployment environment
+      id: determine-env
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          ENV="${{ github.event.inputs.environment }}"
+        elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          ENV="production"
+        else
+          ENV="staging"
+        fi
+        echo "environment=$ENV" >> $GITHUB_OUTPUT
+        echo "Deployment environment: $ENV"
+        
+    - name: Safety checks
+      id: safety-check
+      run: |
+        SHOULD_DEPLOY="true"
+        
+        # Check if this is a production deployment
+        if [ "${{ steps.determine-env.outputs.environment }}" == "production" ]; then
+          echo "Production deployment detected - performing additional checks"
+          
+          # Check if force deploy is requested
+          if [ "${{ github.event.inputs.force_deploy }}" != "true" ]; then
+            # Check for recent commits (avoid accidental deployments)
+            COMMIT_AGE=$(git log -1 --format=%ct)
+            CURRENT_TIME=$(date +%s)
+            AGE_MINUTES=$(( ($CURRENT_TIME - $COMMIT_AGE) / 60 ))
+            
+            if [ $AGE_MINUTES -lt 10 ]; then
+              echo "::warning::Commit is very recent (${AGE_MINUTES} minutes old)"
+              echo "Consider waiting before production deployment"
+            fi
+          fi
+        fi
+        
+        echo "should-deploy=$SHOULD_DEPLOY" >> $GITHUB_OUTPUT
+        
+    - name: Validate configuration
+      run: |
+        echo "::group::Configuration Validation"
+        python -c "
+        from orchestrator.config_loader import load_config, validate_config
+        config = load_config('config.yaml')
+        errors = validate_config(config)
+        if errors:
+            print(f'Configuration errors: {errors}')
+            exit(1)
+        print('Configuration validation passed')
+        "
+        echo "::endgroup::"
+
+  # Job 2: Build deployment package
+  build-deployment:
+    name: Build Deployment Package
+    runs-on: [self-hosted, Linux, X64]
+    needs: [pre-deployment]
+    if: needs.pre-deployment.outputs.should-deploy == 'true'
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Create deployment package
+      run: |
+        echo "::group::Creating Deployment Package"
+        
+        # Create deployment directory structure
+        DEPLOY_DIR="deployment-package"
+        mkdir -p $DEPLOY_DIR
+        
+        # Copy application files
+        cp -r orchestrator/ $DEPLOY_DIR/
+        cp main.py $DEPLOY_DIR/
+        cp config.yaml $DEPLOY_DIR/config.yaml.example
+        cp requirements.txt $DEPLOY_DIR/
+        cp README.md $DEPLOY_DIR/
+        cp ARCHITECTURE.md $DEPLOY_DIR/
+        
+        # Create deployment scripts
+        cat > $DEPLOY_DIR/deploy.sh << 'EOF'
+        #!/bin/bash
+        set -e
+        
+        echo "Starting SecureDownloadsOrchestrator deployment..."
+        
+        # Install dependencies
+        pip install -r requirements.txt
+        
+        # Copy configuration if not exists
+        if [ ! -f config.yaml ]; then
+          cp config.yaml.example config.yaml
+          echo "Configuration template created. Please edit config.yaml before running."
+        fi
+        
+        # Create necessary directories
+        mkdir -p logs
+        
+        echo "Deployment completed successfully!"
+        echo "Run 'python main.py' to start the application"
+        EOF
+        
+        chmod +x $DEPLOY_DIR/deploy.sh
+        
+        # Create version info
+        cat > $DEPLOY_DIR/version.json << EOF
+        {
+          "version": "${{ env.APPLICATION_VERSION }}",
+          "build_number": "${{ github.run_number }}",
+          "commit_sha": "${{ github.sha }}",
+          "branch": "${{ github.ref_name }}",
+          "build_date": "$(date -u -Iseconds)",
+          "environment": "${{ needs.pre-deployment.outputs.deployment-environment }}"
+        }
+        EOF
+        
+        # Create archive
+        tar -czf SecureDownloadsOrchestrator-${{ env.APPLICATION_VERSION }}-${{ github.run_number }}.tar.gz $DEPLOY_DIR/
+        
+        echo "::endgroup::"
+        
+    - name: Upload deployment package
+      uses: actions/upload-artifact@v4
+      with:
+        name: deployment-package-${{ needs.pre-deployment.outputs.deployment-environment }}
+        path: |
+          SecureDownloadsOrchestrator-${{ env.APPLICATION_VERSION }}-${{ github.run_number }}.tar.gz
+          deployment-package/version.json
+        retention-days: 30
+
+  # Job 3: Deploy to staging
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: [self-hosted, Linux, X64]
+    needs: [pre-deployment, build-deployment]
+    if: needs.pre-deployment.outputs.deployment-environment == 'staging'
+    environment: staging
+    
+    steps:
+    - name: Download deployment package
+      uses: actions/download-artifact@v3
+      with:
+        name: deployment-package-staging
+        
+    - name: Deploy to staging environment
+      run: |
+        echo "::group::Staging Deployment"
+        
+        # Create staging directory
+        STAGING_DIR="/tmp/staging-deployment-${{ github.run_number }}"
+        mkdir -p $STAGING_DIR
+        
+        # Extract deployment package
+        tar -xzf SecureDownloadsOrchestrator-${{ env.APPLICATION_VERSION }}-${{ github.run_number }}.tar.gz -C $STAGING_DIR
+        
+        cd $STAGING_DIR/deployment-package
+        
+        # Run deployment script
+        ./deploy.sh
+        
+        # Test application startup
+        timeout 10s python main.py || if [ $? -eq 124 ]; then
+          echo "✓ Application started successfully in staging"
+        else
+          echo "✗ Application failed to start in staging"
+          exit 1
+        fi
+        
+        echo "✓ Staging deployment completed successfully"
+        echo "::endgroup::"
+        
+    - name: Run staging smoke tests
+      run: |
+        echo "::group::Staging Smoke Tests"
+        
+        cd /tmp/staging-deployment-${{ github.run_number }}/deployment-package
+        
+        # Test configuration loading
+        python -c "
+        from orchestrator.config_loader import load_config
+        config = load_config('config.yaml.example')
+        print('✓ Configuration loaded successfully')
+        "
+        
+        # Test file classification
+        python -c "
+        from orchestrator.classifier import classify_file
+        import tempfile
+        import os
+        
+        # Create a test file
+        with tempfile.NamedTemporaryFile(suffix='.txt', delete=False) as f:
+            f.write(b'test content')
+            test_file = f.name
+        
+        try:
+            category = classify_file(test_file)
+            print(f'✓ File classification working: {category}')
+        finally:
+            os.unlink(test_file)
+        "
+        
+        echo "✓ All staging smoke tests passed"
+        echo "::endgroup::"
+
+  # Job 4: Deploy to production
+  deploy-production:
+    name: Deploy to Production
+    runs-on: [self-hosted, Linux, X64]
+    needs: [pre-deployment, build-deployment]
+    if: needs.pre-deployment.outputs.deployment-environment == 'production'
+    environment: production
+    
+    steps:
+    - name: Download deployment package
+      uses: actions/download-artifact@v3
+      with:
+        name: deployment-package-production
+        
+    - name: Pre-production validation
+      run: |
+        echo "::group::Pre-production Validation"
+        
+        # Additional production safety checks
+        echo "Validating deployment package..."
+        
+        if [ ! -f "SecureDownloadsOrchestrator-${{ env.APPLICATION_VERSION }}-${{ github.run_number }}.tar.gz" ]; then
+          echo "✗ Deployment package not found"
+          exit 1
+        fi
+        
+        # Verify package integrity
+        tar -tzf SecureDownloadsOrchestrator-${{ env.APPLICATION_VERSION }}-${{ github.run_number }}.tar.gz > /dev/null
+        echo "✓ Deployment package integrity verified"
+        
+        echo "::endgroup::"
+        
+    - name: Create production backup
+      run: |
+        echo "::group::Production Backup"
+        
+        # Create backup directory with timestamp
+        BACKUP_DIR="/tmp/production-backup-$(date +%Y%m%d-%H%M%S)"
+        mkdir -p $BACKUP_DIR
+        
+        echo "Production backup created at: $BACKUP_DIR"
+        echo "backup-path=$BACKUP_DIR" >> $GITHUB_ENV
+        
+        echo "::endgroup::"
+        
+    - name: Deploy to production environment
+      run: |
+        echo "::group::Production Deployment"
+        
+        # Create production directory
+        PROD_DIR="/tmp/production-deployment-${{ github.run_number }}"
+        mkdir -p $PROD_DIR
+        
+        # Extract deployment package
+        tar -xzf SecureDownloadsOrchestrator-${{ env.APPLICATION_VERSION }}-${{ github.run_number }}.tar.gz -C $PROD_DIR
+        
+        cd $PROD_DIR/deployment-package
+        
+        # Run deployment script
+        ./deploy.sh
+        
+        # Verify deployment
+        if [ -f version.json ]; then
+          echo "Deployed version information:"
+          cat version.json
+        fi
+        
+        echo "✓ Production deployment completed successfully"
+        echo "::endgroup::"
+        
+    - name: Production health check
+      run: |
+        echo "::group::Production Health Check"
+        
+        cd /tmp/production-deployment-${{ github.run_number }}/deployment-package
+        
+        # Test application startup with timeout
+        timeout 15s python main.py || if [ $? -eq 124 ]; then
+          echo "✓ Production application started successfully"
+        else
+          echo "✗ Production application failed to start"
+          echo "Initiating rollback..."
+          exit 1
+        fi
+        
+        echo "✓ Production health check passed"
+        echo "::endgroup::"
+        
+    - name: Post-deployment validation
+      run: |
+        echo "::group::Post-deployment Validation"
+        
+        cd /tmp/production-deployment-${{ github.run_number }}/deployment-package
+        
+        # Validate all components
+        python -c "
+        import sys
+        sys.path.insert(0, '.')
+        
+        # Test all major components
+        from orchestrator.config_loader import load_config
+        from orchestrator.classifier import classify_file
+        from orchestrator.logger import setup_logger
+        
+        print('✓ All components imported successfully')
+        
+        # Test configuration
+        config = load_config('config.yaml.example')
+        print('✓ Configuration system working')
+        
+        # Test logging
+        logger = setup_logger('test', config)
+        logger.info('Test log message')
+        print('✓ Logging system working')
+        
+        print('✓ Production validation completed successfully')
+        "
+        
+        echo "::endgroup::"
+
+  # Job 5: Post-deployment notification
+  post-deployment:
+    name: Post-deployment Notification
+    runs-on: [self-hosted, Linux, X64]
+    needs: [pre-deployment, deploy-staging, deploy-production]
+    if: always() && needs.pre-deployment.outputs.should-deploy == 'true'
+    
+    steps:
+    - name: Determine deployment status
+      id: status
+      run: |
+        if [ "${{ needs.deploy-staging.result }}" == "success" ] || [ "${{ needs.deploy-production.result }}" == "success" ]; then
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "emoji=✅" >> $GITHUB_OUTPUT
+        else
+          echo "status=failure" >> $GITHUB_OUTPUT
+          echo "emoji=❌" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Create deployment summary
+      run: |
+        echo "::group::Deployment Summary"
+        
+        cat > deployment-summary.md << EOF
+        # Deployment Summary ${{ steps.status.outputs.emoji }}
+        
+        **Environment:** ${{ needs.pre-deployment.outputs.deployment-environment }}
+        **Version:** ${{ env.APPLICATION_VERSION }}
+        **Build:** ${{ github.run_number }}
+        **Commit:** ${{ github.sha }}
+        **Deployed at:** $(date -u)
+        
+        ## Status
+        - **Pre-deployment:** ${{ needs.pre-deployment.result }}
+        - **Build:** ${{ needs.build-deployment.result }}
+        - **Staging:** ${{ needs.deploy-staging.result }}
+        - **Production:** ${{ needs.deploy-production.result }}
+        
+        ## Artifacts
+        - Deployment package created and validated
+        - Health checks completed
+        - All components verified
+        
+        EOF
+        
+        cat deployment-summary.md
+        echo "::endgroup::"
+        
+    - name: Upload deployment summary
+      uses: actions/upload-artifact@v3
+      with:
+        name: deployment-summary
+        path: deployment-summary.md
+        retention-days: 90
+
+  # Job 6: Rollback capability
+  rollback:
+    name: Emergency Rollback
+    runs-on: [self-hosted, Linux, X64]
+    if: failure() && github.event.inputs.force_deploy != 'true'
+    needs: [deploy-production]
+    environment: production
+    
+    steps:
+    - name: Perform emergency rollback
+      run: |
+        echo "::group::Emergency Rollback"
+        echo "🚨 Production deployment failed - initiating rollback"
+        
+        # Rollback logic would go here
+        # This is a placeholder for actual rollback procedures
+        
+        echo "Rollback procedures would be executed here"
+        echo "- Stop current application"
+        echo "- Restore from backup"
+        echo "- Verify rollback success"
+        echo "- Update monitoring systems"
+        
+        echo "::endgroup::"

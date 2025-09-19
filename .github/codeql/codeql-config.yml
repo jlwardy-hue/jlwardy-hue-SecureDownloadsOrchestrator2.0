@@ -1,0 +1,44 @@
+name: "SecureDownloadsOrchestrator CodeQL Configuration"
+
+# Disable the default suite to run custom queries
+disable-default-queries: false
+
+# Include additional query suites for comprehensive security analysis
+queries:
+  - uses: security-and-quality
+  - uses: security-extended
+
+# Paths to include in the analysis
+paths:
+  - orchestrator/
+  - main.py
+
+# Paths to exclude from analysis
+paths-ignore:
+  - tests/
+  - docs/
+  - .github/
+  - logs/
+  - "**/__pycache__/"
+  - "**/*.pyc"
+
+# Custom query filters
+query-filters:
+  - exclude:
+      id: py/unused-import
+      # Exclude unused import warnings in test files
+      
+  - include:
+      tags:
+        - security
+        - correctness
+        - maintainability
+
+# Additional configuration for Python analysis
+python:
+  # Specify the Python version for analysis
+  version: "3.8"
+  
+  # Dependencies to analyze (production only)
+  setup: |
+    pip install -r requirements.txt
