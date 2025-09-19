@@ -410,8 +410,19 @@ class UnifiedFileProcessor:
             match = re.search(pattern, text)
             if match:
                 try:
-                    # Attempt to parse the date (simplified)
-                    metadata.date_detected = datetime.now()  # Placeholder
+                    # Attempt to parse the date from the matched string
+                    date_str = match.group(1) if match.lastindex else match.group(0)
+                    date_formats = [
+                        "%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d", "%Y-%m-%d", "%m-%d-%Y", "%d-%m-%Y", "%B %d, %Y", "%d %b %Y"
+                    ]
+                    parsed = None
+                    for fmt in date_formats:
+                        try:
+                            parsed = datetime.strptime(date_str, fmt)
+                            break
+                        except Exception:
+                            continue
+                    metadata.date_detected = parsed
                     break
                 except Exception:
                     continue
