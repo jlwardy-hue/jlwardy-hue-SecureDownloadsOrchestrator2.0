@@ -92,11 +92,11 @@ SecureDownloadsOrchestrator2.0/
 
 4. **Run the application:**
    ```bash
-   # Using the main entry point
-   python main.py
-   
-   # Or using the module directly
+   # Recommended: Using the module directly (no PYTHONPATH needed)
    python -m orchestrator.main
+   
+   # Alternative: Using the compatibility entry point
+   python main.py
    ```
 
 ### Configuration
@@ -167,7 +167,7 @@ processing:
 ### Testing
 
 ```bash
-# Run all tests
+# Run all tests (no manual PYTHONPATH needed)
 pytest
 
 # Run tests with coverage
@@ -176,7 +176,12 @@ pytest --cov=orchestrator --cov-report=html
 # Run specific test categories
 pytest -m unit      # Unit tests only
 pytest -m integration  # Integration tests only
+
+# Run basic import tests to verify package setup
+pytest tests/test_import_orchestrator.py
 ```
+
+**Note**: Tests work out of the box thanks to `pytest.ini` configuration that automatically sets the Python path. No manual `PYTHONPATH` configuration is required.
 
 ### Project Structure Guidelines
 

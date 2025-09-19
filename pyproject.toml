@@ -25,6 +25,7 @@ known_first_party = ["orchestrator"]
 known_third_party = ["watchdog", "yaml", "magic", "pytest"]
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
