@@ -172,7 +172,7 @@ bandit -r orchestrator/ -f txt
 
 # Run dependency scanning - REQUIRES NETWORK ACCESS
 safety check
-# Note: safety check may fail in sandboxed/offline environments
+# Note: safety check may fail in sandboxed or offline environments
 ```
 
 ## Common Tasks
