@@ -29,7 +29,7 @@ def expand_user_paths(cfg_section):
     # Recursively expand paths
     if isinstance(cfg_section, dict):
         for k, v in cfg_section.items():
-            if isinstance(v, str) and ("/" in v or "\" in v):
+            if isinstance(v, str) and ("/" in v or "\\" in v):
                 cfg_section[k] = os.path.expanduser(v)
             else:
                 expand_user_paths(v)
