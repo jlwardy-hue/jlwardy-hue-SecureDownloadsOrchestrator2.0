@@ -258,7 +258,12 @@ while read usage; do
 done
 
 # Check quarantine files older than 30 days
-find /data/organized/quarantine -type f -mtime +30 -exec rm {} \;
+# Move old quarantine files to backup and log the action
+mkdir -p /data/organized/quarantine_backup
+find /data/organized/quarantine -type f -mtime +30 | while read file; do
+  mv "$file" /data/organized/quarantine_backup/ && \
+  echo "Moved $file to quarantine_backup" | logger -t secure-orchestrator
+done
 
 # Rotate logs if needed
 sudo logrotate /etc/logrotate.d/secure-orchestrator
