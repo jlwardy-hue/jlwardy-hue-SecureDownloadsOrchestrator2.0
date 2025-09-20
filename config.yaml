@@ -45,6 +45,15 @@ processing:
   enable_ocr: true
   enable_archive_extraction: true
   enable_unified_pipeline: true
+  
+  # Enhanced AI processing options
+  ai_multi_skill:
+    enable_summarization: false      # Enable content summarization
+    enable_sensitive_detection: false # Enable sensitive information detection  
+    enable_metadata_extraction: false # Enable metadata extraction
+    ocr_for_non_text: true           # Use OCR for non-text files before AI processing
+    skip_large_files: true           # Skip files larger than max_content_length
+    parallel_processing: false       # Process multiple skills in parallel (future feature)
 
 # AI Classification Configuration
 # Set OPENAI_API_KEY environment variable before enabling AI classification
@@ -55,3 +64,83 @@ ai_classification:
   max_content_length: 2048       # Maximum characters to send for classification (2KB)
   timeout: 30                    # API request timeout in seconds
   # Note: API key is read from OPENAI_API_KEY environment variable for security
+  
+  # Multi-skill AI operations configuration
+  skills:
+    # File classification with JSON output
+    classification:
+      enabled: true
+      prompt_template: |
+        Analyze the file content and classify it. Return a JSON response with the following structure:
+        {{
+          "category": "one of: document, image, audio, video, archive, code, executable, pdf, spreadsheet, presentation, unknown",
+          "confidence": "high|medium|low",
+          "reasoning": "brief explanation for the classification",
+          "file_type": "detected file type",
+          "content_type": "text|binary|mixed"
+        }}
+        
+        File: {filename}
+        Content preview:
+        {content}
+      max_tokens: 200
+      temperature: 0.1
+    
+    # Content summarization
+    summarization:
+      enabled: false
+      prompt_template: |
+        Analyze the file content and provide a comprehensive summary. Return a JSON response:
+        {{
+          "summary": "brief 2-3 sentence summary of the content",
+          "key_topics": ["topic1", "topic2", "topic3"],
+          "content_length": "estimated word count",
+          "language": "detected language",
+          "document_type": "detected document type"
+        }}
+        
+        File: {filename}
+        Content:
+        {content}
+      max_tokens: 300
+      temperature: 0.3
+    
+    # Sensitive information detection
+    sensitive_detection:
+      enabled: false
+      prompt_template: |
+        Analyze the file content for sensitive information. Return a JSON response:
+        {{
+          "has_sensitive_info": true/false,
+          "sensitivity_level": "none|low|medium|high|critical",
+          "detected_types": ["email", "phone", "ssn", "credit_card", "password", "api_key", "personal_data"],
+          "risk_assessment": "brief risk assessment",
+          "recommended_action": "suggested security action"
+        }}
+        
+        File: {filename}
+        Content:
+        {content}
+      max_tokens: 250
+      temperature: 0.1
+    
+    # Metadata extraction
+    metadata_extraction:
+      enabled: false
+      prompt_template: |
+        Extract metadata and structured information from the file content. Return a JSON response:
+        {{
+          "title": "extracted or inferred title",
+          "author": "extracted or inferred author",
+          "creation_date": "extracted or estimated date",
+          "keywords": ["keyword1", "keyword2"],
+          "description": "brief description of content",
+          "structure": "document structure analysis",
+          "quality": "content quality assessment"
+        }}
+        
+        File: {filename}
+        Content:
+        {content}
+      max_tokens: 400
+      temperature: 0.2
