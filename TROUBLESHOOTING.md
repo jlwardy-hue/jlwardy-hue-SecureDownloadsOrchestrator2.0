@@ -692,6 +692,76 @@ git push origin main
 git push --force-with-lease origin main
 ```
 
+### 6.3 Merge Conflicts
+
+#### Symptoms
+```bash
+Auto-merging config.yaml
+CONFLICT (content): Merge conflict in config.yaml
+Auto-merging requirements.txt
+CONFLICT (content): Merge conflict in requirements.txt
+Automatic merge failed; fix conflicts and then commit the result.
+```
+
+#### Step-by-Step Resolution
+
+**1. Check Conflict Status**
+```bash
+# See which files have conflicts
+git status
+
+# Use our automated checker
+python scripts/git_conflict_resolver.py
+```
+
+**2. Resolve Conflicts in Each File**
+```bash
+# Edit the conflicted files
+nano config.yaml  # or your preferred editor
+
+# Look for conflict markers:
+# <<<<<<< HEAD
+#   your current changes
+# =======
+#   incoming changes
+# >>>>>>> branch-name
+
+# Choose the correct version or merge manually
+# Remove all conflict markers (<<<<<<<, =======, >>>>>>>)
+```
+
+**3. Mark Conflicts as Resolved**
+```bash
+# Stage the resolved files
+git add config.yaml
+git add requirements.txt
+
+# Complete the merge
+git commit -m "Resolve merge conflicts"
+```
+
+**4. Push the Changes**
+```bash
+git push origin your-branch-name
+```
+
+#### Common Conflict Scenarios
+
+**Config File Conflicts**
+- Usually happen when multiple people modify `config.yaml`
+- Choose the version that includes all necessary features
+- Test the configuration after resolving
+
+**Requirements Conflicts**
+- Merge all unique dependencies
+- Keep the highest version numbers
+- Test with `pip install -r requirements.txt` after resolving
+
+**Code Conflicts**
+- Carefully review the logic changes
+- Run tests after resolving
+- Consider refactoring if conflicts are frequent
+
 ### 6.3 AI Integration Already Exists
 
 #### Issue
@@ -770,7 +840,45 @@ git check-ignore path/to/file
 # (already configured in .gitignore)
 ```
 
-### 6.5 Repository Recovery
+### 6.5 Automated Git Conflict Resolution
+
+We provide automated tools to help identify and resolve Git conflicts:
+
+#### Git Conflict Resolver Script
+
+**Basic Health Check**
+```bash
+# Check repository health
+python scripts/git_conflict_resolver.py
+
+# Auto-fix common issues
+python scripts/git_conflict_resolver.py --auto-fix
+
+# Check specific files for conflict markers
+python scripts/git_conflict_resolver.py --check-files config.yaml requirements.txt
+```
+
+**What It Detects:**
+- Embedded git repositories
+- Active merge conflicts
+- Conflict markers in files
+- Branch synchronization issues
+
+**What It Can Auto-Fix:**
+- Remove embedded repositories
+- Clean up empty directories
+- Provide resolution guidance
+
+#### Testing Git Workflows
+
+```bash
+# Test conflict resolution functionality
+python scripts/test_git_conflicts.py
+```
+
+This script validates that our conflict resolution tools work correctly.
+
+### 6.6 Repository Recovery
 
 #### Corrupted Working Directory
 ```bash

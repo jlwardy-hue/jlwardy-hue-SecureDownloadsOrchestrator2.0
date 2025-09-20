@@ -263,6 +263,44 @@ class SetupManager:
             self.issues.append(f"Configuration error: {e}")
             return False
 
+    def check_git_health(self) -> bool:
+        """Check Git repository health for common issues."""
+        self.print_status("Checking Git repository health...", "INFO")
+        
+        try:
+            git_script = self.repo_root / "scripts" / "git_conflict_resolver.py"
+            if not git_script.exists():
+                self.warnings.append("Git conflict resolver script not found")
+                return True  # Don't fail setup for this
+            
+            # Run the git health check
+            result = subprocess.run(
+                [sys.executable, str(git_script), "--repo-path", str(self.repo_root)],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                if "repository is healthy" in result.stdout.lower():
+                    self.print_status("Git repository healthy ✓", "SUCCESS")
+                    self.success_items.append("Git health")
+                else:
+                    self.warnings.append("Git repository has warnings (see output above)")
+            else:
+                # Git issues detected
+                if "conflict" in result.stdout.lower():
+                    self.warnings.append("Git conflicts detected - use scripts/git_conflict_resolver.py to fix")
+                else:
+                    self.warnings.append("Git repository issues detected")
+                
+        except subprocess.TimeoutExpired:
+            self.warnings.append("Git health check timed out")
+        except Exception as e:
+            self.warnings.append(f"Could not check Git health: {e}")
+        
+        return True  # Don't fail setup for git issues
+
     def create_runtime_directories(self) -> bool:
         """Create directories that should exist at runtime."""
         self.print_status("Creating runtime directories...", "INFO")
@@ -493,6 +531,10 @@ class SetupManager:
             self.check_system_dependencies,
             self.check_configuration,
         ]
+        
+        # Add git health check if we're in a git repository
+        if (self.repo_root / ".git").exists():
+            checks.append(self.check_git_health)
 
         all_passed = True
         for check in checks:
