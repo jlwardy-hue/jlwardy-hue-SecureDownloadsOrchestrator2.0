@@ -89,13 +89,13 @@ For the smoothest setup experience, use our automated setup script which require
    ```bash
    # Quick setup (one command - creates all directories automatically)
    ./setup.sh
-   
+
    # Or using Python directly
    python scripts/setup.py
-   
+
    # Setup with virtual environment (recommended for development)
    ./setup.sh venv
-   
+
    # Just verify current setup
    ./setup.sh verify
    ```
@@ -134,7 +134,7 @@ If you prefer manual setup or need to troubleshoot:
    ```bash
    # Production dependencies
    pip install -r requirements.txt
-   
+
    # Development dependencies (optional)
    pip install -r requirements-dev.txt
    ```
@@ -149,7 +149,7 @@ If you prefer manual setup or need to troubleshoot:
    ```bash
    # Recommended: Using the module directly (no PYTHONPATH needed)
    python -m orchestrator.main
-   
+
    # Alternative: Using the compatibility entry point
    python main.py
    ```
@@ -240,9 +240,9 @@ rm -rf __pycache__ .pytest_cache logs/*.log
 1. **Run diagnostics:** `python scripts/setup.py --verify`
 2. **Check comprehensive troubleshooting guide:** [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 3. **Review deployment documentation:** [DEPLOYMENT.md](DEPLOYMENT.md)
-2. **Check logs:** Look in `logs/app.log` for detailed error messages
-3. **Test imports:** `python -c "from orchestrator.main import main; print('✓ OK')"`
-4. **Validate config:** `python -c "from orchestrator.config_loader import load_config; print('✓ Config OK')"`
+4. **Check logs:** Look in `logs/app.log` for detailed error messages
+5. **Test imports:** `python -c "from orchestrator.main import main; print('✓ OK')"`
+6. **Validate config:** `python -c "from orchestrator.config_loader import load_config; print('✓ Config OK')"`
 
 For additional help, please open an issue with:
 - Output of `python scripts/setup.py --verify`
@@ -272,7 +272,7 @@ For production environments, additional considerations apply beyond basic setup:
 
 📖 **[DEPLOYMENT.md](DEPLOYMENT.md)** - Complete production deployment guide covering:
 - System requirements and dependencies
-- Security configuration and hardening  
+- Security configuration and hardening
 - Service setup with systemd
 - Monitoring and maintenance procedures
 - Scaling and performance optimization
@@ -352,7 +352,6 @@ The application includes comprehensive security features that can be configured:
 - **Path Traversal Protection**: Comprehensive validation of all file paths
 - **Atomic Move Detection**: Ensures files are completely written before processing
 - **Quarantine Logging**: Detailed logs for all security events
-```
 
 ## 🏗️ Development
 
@@ -373,16 +372,16 @@ The application includes comprehensive security features that can be configured:
    ```bash
    # Code formatting
    black orchestrator/ main.py
-   
+
    # Import sorting
    isort orchestrator/ main.py
-   
+
    # Linting
    flake8 orchestrator/ main.py
-   
+
    # Type checking
    mypy orchestrator/ main.py
-   
+
    # Security scanning
    bandit -r orchestrator/
    ```
@@ -522,7 +521,7 @@ class FileClassifier:
     def __init__(self, categories_config: Dict[str, Any]):
         # AI initialization already handled
         self._initialize_openai_client()
-    
+
     def classify_with_ai(self, file_content: str, filename: str) -> Optional[str]:
         """AI classification already implemented with error handling"""
         # Uses OpenAI GPT for intelligent classification
