@@ -1,3 +1,47 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "orchestrator"
+version = "0.0.0"
+description = "SecureDownloadsOrchestrator 2.0 - Secure file organization system"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "SecureDownloadsOrchestrator Team"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "watchdog>=2.0.0",
+    "PyYAML>=6.0",
+    "python-magic>=0.4.27",
+    "pytesseract>=0.3.9",
+    "Pillow>=9.0.0",
+    "pdf2image>=3.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/jlwardy-hue/jlwardy-hue-SecureDownloadsOrchestrator2.0"
+Repository = "https://github.com/jlwardy-hue/jlwardy-hue-SecureDownloadsOrchestrator2.0"
+
+[project.scripts]
+secure-orchestrator = "orchestrator.main:main"
+
+[tool.setuptools.packages.find]
+include = ["orchestrator*"]
+exclude = ["logs*", "tests*", "scripts*", "examples*"]
+
 [tool.black]
 line-length = 88
 target-version = ['py38']
