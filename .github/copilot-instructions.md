@@ -4,18 +4,37 @@ SecureDownloadsOrchestrator 2.0 is a Python-based secure file organization syste
 
 Always reference these instructions first and fallback to search or bash commands only when you encounter unexpected information that does not match the info here.
 
+## ⚠️ CRITICAL NETWORK REQUIREMENTS
+
+**This repository requires reliable internet connectivity for full development functionality:**
+
+- **Dev dependencies installation**: Requires PyPI access for pytest, black, flake8, mypy, isort, bandit, safety
+- **Security scanning**: `safety check` requires network access to vulnerability databases
+- **CI/CD compatibility**: GitHub Actions workflows expect these tools to be available
+
+**In restricted network environments (air-gapped, firewalled, etc.):**
+- Core application functionality works offline (file monitoring, organization, basic security)
+- Development tools (linting, testing, CI) may not be installable
+- See "Restricted Network Environments" section below for workarounds
+
 ## Working Effectively
 
 ### Bootstrap, Build, and Test the Repository
 
 1. **Install dependencies:**
    ```bash
+   # Core dependencies (ALWAYS WORKS - no network issues observed)
    pip install -r requirements.txt
+   # Takes ~10 seconds. NEVER CANCEL. Set timeout to 60+ seconds.
+   
+   # Dev dependencies (REQUIRES STABLE NETWORK CONNECTION)
    pip install -r requirements-dev.txt
+   # Takes ~25 seconds if network is stable. OFTEN FAILS with PyPI timeouts.
+   # If this fails, see "Restricted Network Environments" section below.
    ```
-   - Takes ~30 seconds total (~6s core + ~25s dev). NEVER CANCEL. Set timeout to 180+ seconds.
-   - Installs core dependencies (watchdog, PyYAML, python-magic, pytesseract, Pillow, pdf2image)
-   - Installs dev dependencies (pytest, black, flake8, mypy, isort, bandit, safety, sphinx)
+   - **Core dependencies**: watchdog, PyYAML, python-magic, pytesseract, Pillow, pdf2image
+   - **Dev dependencies**: pytest, black, flake8, mypy, isort, bandit, safety, sphinx
+   - **CRITICAL**: Dev dependency installation frequently fails due to PyPI connection timeouts
 
 2. **Verify setup:**
    ```bash
@@ -27,6 +46,9 @@ Always reference these instructions first and fallback to search or bash command
 
 3. **Run tests:**
    ```bash
+   # FIRST: Check if pytest is available
+   python -c "import pytest; print('pytest available')" || echo "pytest not installed - see network requirements"
+   
    # Basic import validation (takes ~0.4 seconds)
    pytest tests/test_import_orchestrator.py -v
    
@@ -36,12 +58,26 @@ Always reference these instructions first and fallback to search or bash command
    # Full test suite with coverage (takes ~36 seconds) - NEVER CANCEL 
    pytest --cov=orchestrator --cov-report=html
    ```
+   - **CRITICAL**: pytest may not be available due to network installation issues
    - NEVER CANCEL test runs. Set timeout to 120+ seconds for full test suite.
    - Tests include unit, integration, and security tests (63 total tests)
+   - **If pytest unavailable**: Use `python -c "import orchestrator; print('Basic imports work')"` for basic validation
 
 ### Code Quality and Linting
 
-**ALWAYS run these commands before committing or the CI (.github/workflows/ci.yml) will fail:**
+**CRITICAL**: These tools require network installation and may not be available in restricted environments.
+
+**ALWAYS verify tools are available before attempting to use:**
+
+```bash
+# Verify linting tools are installed
+python -c "import black; print('black available')" || echo "❌ black not available"
+python -c "import isort; print('isort available')" || echo "❌ isort not available" 
+python -c "import flake8; print('flake8 available')" || echo "❌ flake8 not available"
+python -c "import mypy; print('mypy available')" || echo "❌ mypy not available"
+```
+
+**If tools are available, run these commands before committing or the CI (.github/workflows/ci.yml) will fail:**
 
 ```bash
 # Fix code formatting (takes ~0.6 seconds)
@@ -84,6 +120,7 @@ mypy orchestrator/ main.py --show-error-codes --show-error-context
    ```
    - Takes ~0.2 seconds to start. Application runs continuously monitoring directories.
    - Use Ctrl+C to stop gracefully.
+   - **Note**: Application does not support --help flag. It requires a valid config.yaml file.
 
 3. **Quick setup with virtual environment:**
    ```bash
@@ -130,8 +167,12 @@ After making changes, ALWAYS test the complete workflow:
    # May contain quarantined files if ClamAV is not available
    ```
 
-4. **Always run all quality checks:**
+4. **Always run all quality checks (if tools are available):**
    ```bash
+   # Verify tools first
+   python -c "import black, isort, flake8, mypy, pytest" || echo "Some tools missing - see network requirements"
+   
+   # Run checks if available
    black orchestrator/ main.py
    isort orchestrator/ main.py
    flake8 orchestrator/ main.py
@@ -164,6 +205,9 @@ To test normal file organization, either:
 
 ### Security Testing
 ```bash
+# FIRST: Verify security tools are available
+python -c "import bandit; print('bandit available')" || echo "❌ bandit not available"
+
 # Run security-specific tests (takes ~18 seconds) - NEVER CANCEL
 pytest tests/security/ -v
 
@@ -172,10 +216,51 @@ bandit -r orchestrator/ -f txt
 
 # Run dependency scanning - REQUIRES NETWORK ACCESS
 safety check
-# Note: safety check may fail in sandboxed or offline environments
+# Note: safety check REQUIRES network access and WILL FAIL in restricted environments
 ```
 
 ## Common Tasks
+
+### Restricted Network Environments
+
+**If dev dependencies fail to install due to network timeouts:**
+
+```bash
+# 1. Verify core functionality works
+python -c "import orchestrator; print('✅ Core application ready')"
+python scripts/setup.py --verify
+
+# 2. Test basic application functionality
+mkdir -p /tmp/test_watch /tmp/test_dest
+python -m orchestrator.main &
+APP_PID=$!
+echo "test" > /tmp/test_watch/test.txt
+sleep 3
+kill $APP_PID
+ls -la /tmp/test_dest/  # Should show directory structure
+
+# 3. Manual code quality checks (without automated tools)
+python -m py_compile orchestrator/*.py  # Basic syntax check
+python -c "
+import ast
+import os
+for root, dirs, files in os.walk('orchestrator'):
+    for file in files:
+        if file.endswith('.py'):
+            with open(os.path.join(root, file)) as f:
+                try:
+                    ast.parse(f.read())
+                    print(f'✅ {file}')
+                except SyntaxError as e:
+                    print(f'❌ {file}: {e}')
+"
+
+# 4. Alternative approaches
+# - Use local/offline package mirrors if available
+# - Pre-install tools in base environment
+# - Use containerized development environments
+# - Skip linting temporarily (document as technical debt)
+```
 
 ### Development Setup
 ```bash
@@ -257,14 +342,17 @@ The project uses GitHub Actions with comprehensive quality gates:
 - **Import errors**: Run `python scripts/setup.py --verify` to check dependencies
 - **Permission errors**: Ensure write access to destination directories
 - **OCR not working**: Install tesseract-ocr and poppler-utils
-- **CI failures**: Always run `black`, `isort`, `flake8`, and `pytest` before committing
-- **Security scanning network errors**: `safety check` requires internet access and may fail in sandboxed environments
+- **CI failures**: Always run `black`, `isort`, `flake8`, and `pytest` before committing (if available)
+- **Dev dependency installation failures**: See "Restricted Network Environments" section above
+- **PyPI timeouts**: Common in sandboxed, air-gapped, or firewalled environments
+- **Security scanning network errors**: `safety check` requires internet access and will fail in restricted environments
 - **Files quarantined unexpectedly**: Check if ClamAV is installed; without it, security scanning fails closed and quarantines all files
 - **Slow MyPy execution**: Type checking takes ~2.6 seconds, significantly longer than other linting tools
 
 ### Time Expectations
-- **Setup verification**: ~0.2 seconds
-- **Dependency installation**: ~30 seconds (6s core + 25s dev)
+- **Setup verification**: ~0.8 seconds
+- **Core dependency installation**: ~10 seconds (requires network)
+- **Dev dependency installation**: ~25 seconds (requires stable network, often fails)
 - **Basic tests**: ~0.6 seconds
 - **Unit tests**: ~8.3 seconds (33 tests) - NEVER CANCEL
 - **Full test suite**: ~36 seconds (63 tests) - NEVER CANCEL
@@ -285,6 +373,9 @@ NEVER CANCEL any build or test commands. Most operations complete in under 1 min
 - **MyPy type checking**: Takes ~2.6 seconds (4x longer than other linting tools) - set timeout to 30+ seconds
 - **Security tests**: Take ~18 seconds (not 5 as initially expected) - set timeout to 60+ seconds  
 - **Full test suite**: Takes ~36 seconds - set timeout to 120+ seconds
-- **Dependency installation**: Takes ~30 seconds total - set timeout to 180+ seconds
+- **Core dependency installation**: Takes ~10 seconds - set timeout to 60+ seconds
+- **Dev dependency installation**: Takes ~25 seconds IF network is stable - set timeout to 180+ seconds
+
+**CRITICAL NETWORK ISSUES**: Dev dependency installation frequently fails due to PyPI timeouts. This is normal in restricted network environments.
 
 If a command appears stuck, wait at least the expected time + 50% buffer before investigating.
