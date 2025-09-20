@@ -110,7 +110,7 @@ class UnifiedFileProcessor:
         self.logger = logger or logging.getLogger(__name__)
 
         # Initialize components
-        self.classifier = FileClassifier(logger)
+        self.classifier = FileClassifier(config, logger)
         self.file_detector = FileTypeDetector()
 
         # Configuration paths

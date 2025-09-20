@@ -45,3 +45,13 @@ processing:
   enable_ocr: true
   enable_archive_extraction: true
   enable_unified_pipeline: true
+
+# AI Classification Configuration
+# Set OPENAI_API_KEY environment variable before enabling AI classification
+ai_classification:
+  provider: "openai"              # AI provider (currently supports: openai)
+  model: "gpt-3.5-turbo"         # OpenAI model to use for classification
+  endpoint: "https://api.openai.com/v1"  # OpenAI API endpoint
+  max_content_length: 2048       # Maximum characters to send for classification (2KB)
+  timeout: 30                    # API request timeout in seconds
+  # Note: API key is read from OPENAI_API_KEY environment variable for security

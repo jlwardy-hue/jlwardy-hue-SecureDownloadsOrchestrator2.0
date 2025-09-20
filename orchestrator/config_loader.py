@@ -45,6 +45,20 @@ def get_default_config():
             "console": {"enabled": True, "level": "INFO"},
             "file": {"enabled": True, "path": "./logs/app.log", "level": "INFO"},
         },
+        "processing": {
+            "enable_ai_classification": False,
+            "enable_security_scan": False,
+            "enable_ocr": True,
+            "enable_archive_extraction": True,
+            "enable_unified_pipeline": True,
+        },
+        "ai_classification": {
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+            "endpoint": "https://api.openai.com/v1",
+            "max_content_length": 2048,
+            "timeout": 30,
+        },
         # ...other defaults...
     }
 
