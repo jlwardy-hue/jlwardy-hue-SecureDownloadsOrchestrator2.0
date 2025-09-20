@@ -340,7 +340,7 @@ class SetupManager:
         self.print_status("  • Missing spaces after colons", "INFO")
         self.print_status("", "INFO")
         self.print_status("You can validate YAML syntax with:", "INFO")
-        self.print_status("  python -c \"import yaml; yaml.safe_load(open('config.yaml'))\"", "INFO")
+        self.print_status(f"  python -c \"import yaml; yaml.safe_load(open('{self.config_path}'))\"", "INFO")
 
     def check_git_health(self) -> bool:
         """Check Git repository health for common issues."""
