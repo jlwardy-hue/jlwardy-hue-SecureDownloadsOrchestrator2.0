@@ -235,10 +235,9 @@ class FileClassifier:
             self._openai_client = openai.OpenAI(api_key=api_key, base_url=endpoint)
 
             # Log successful initialization without exposing API key
-            api_key_preview = f"{api_key[:8]}...{api_key[-4:]}" if len(api_key) >= 12 else "***"
             self.logger.info(
                 f"OpenAI client initialized successfully for AI classification "
-                f"(endpoint: {endpoint}, API key: {api_key_preview})"
+                f"(endpoint: {endpoint})"
             )
 
         except ImportError:
