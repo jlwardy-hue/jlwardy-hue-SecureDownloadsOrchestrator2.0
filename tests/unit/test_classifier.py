@@ -4,6 +4,8 @@ Unit tests for file classifier module.
 
 from pathlib import Path
 from unittest.mock import Mock, patch
+import pytest
+import tempfile
 
 from orchestrator.classifier import FileClassifier, classify_file
 
