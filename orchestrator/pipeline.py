@@ -17,7 +17,6 @@ import logging
 import os
 import re
 import shutil
-import stat
 import subprocess
 import tarfile
 import tempfile
@@ -749,10 +748,10 @@ class UnifiedFileProcessor:
                     if text.strip():
                         all_text.append(text)
                         self.logger.debug(
-                            f"OCR text extracted from page {i+1}: {len(text)} characters"
+                            f"OCR text extracted from page {i + 1}: {len(text)} characters"
                         )
                 except Exception as e:
-                    self.logger.warning(f"OCR failed for image {i+1}: {e}")
+                    self.logger.warning(f"OCR failed for image {i + 1}: {e}")
 
             if not all_text:
                 return None
