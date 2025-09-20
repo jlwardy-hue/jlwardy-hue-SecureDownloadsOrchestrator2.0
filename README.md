@@ -223,6 +223,8 @@ rm -rf __pycache__ .pytest_cache logs/*.log
 - On Ubuntu: `sudo apt install python3-dev libmagic1`
 
 **❌ "Configuration validation failed"**
+- Run the configuration validator: `python scripts/validate_config.py`
+- See detailed troubleshooting: [CONFIG_TROUBLESHOOTING.md](CONFIG_TROUBLESHOOTING.md)
 - Verify `config.yaml` syntax with: `python -c "import yaml; yaml.safe_load(open('config.yaml'))"`
 - Check file permissions on `config.yaml`
 - Ensure source/destination paths exist or can be created
