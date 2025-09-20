@@ -118,6 +118,12 @@ main() {
         print_info "For help, see: https://github.com/jlwardy-hue/jlwardy-hue-SecureDownloadsOrchestrator2.0#readme"
     else
         print_error "Setup failed. Check the output above for details."
+        echo ""
+        print_info "Common solutions:"
+        print_info "• For Git conflict markers: python scripts/git_conflict_resolver.py"
+        print_info "• For permission issues: Check directory write permissions"
+        print_info "• For dependency issues: Try: pip install --upgrade pip"
+        print_info "• For complete help: see TROUBLESHOOTING.md"
         exit 1
     fi
 }

@@ -424,9 +424,55 @@ class SetupManager:
             self.issues.append(f"Functionality test failed: {e}")
             return False
 
+    def check_for_conflict_markers_in_deps(self) -> bool:
+        """Check for Git conflict markers in dependency files before installation."""
+        self.print_status("Checking dependency files for conflict markers...", "INFO")
+        
+        dependency_files = ["requirements.txt", "requirements-dev.txt"]
+        conflict_markers = ['<<<<<<<', '=======', '>>>>>>>']
+        found_markers = []
+        
+        for file_path in dependency_files:
+            full_path = self.repo_root / file_path
+            if not full_path.exists():
+                continue
+                
+            try:
+                with open(full_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    
+                for i, line in enumerate(content.split('\n'), 1):
+                    for marker in conflict_markers:
+                        if marker in line:
+                            found_markers.append(f"{file_path}:{i} - {marker}")
+                            
+            except Exception as e:
+                self.warnings.append(f"Could not read {file_path}: {e}")
+        
+        if found_markers:
+            self.print_status("Git conflict markers found in dependency files!", "ERROR")
+            for marker in found_markers:
+                self.print_status(f"  - {marker}", "ERROR")
+            self.issues.append("Git conflict markers found in dependency files")
+            self.print_status("", "INFO")
+            self.print_status("🔧 TO FIX:", "INFO")
+            self.print_status("1. Edit the affected files and remove all conflict markers", "INFO")
+            self.print_status("2. Choose the correct version of each conflicted section", "INFO")
+            self.print_status("3. Run the setup again", "INFO")
+            self.print_status("", "INFO")
+            self.print_status("For help, see: python scripts/git_conflict_resolver.py", "INFO")
+            return False
+        else:
+            self.print_status("No conflict markers found in dependency files ✓", "SUCCESS")
+            return True
+
     def install_dependencies(self) -> bool:
         """Install Python dependencies."""
         self.print_status("Installing Python dependencies...", "INFO")
+
+        # First check for conflict markers
+        if not self.check_for_conflict_markers_in_deps():
+            return False
 
         try:
             cmd = [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"]
@@ -435,7 +481,23 @@ class SetupManager:
             )
 
             if result.returncode != 0:
-                self.issues.append(f"Failed to install dependencies: {result.stderr}")
+                # Check if the error is due to conflict markers (common pip error)
+                stderr_lower = result.stderr.lower()
+                if "expected package name" in stderr_lower and ("<<<<<<" in stderr_lower or ">>>>>>>" in stderr_lower):
+                    self.issues.append("Failed to install dependencies: Git conflict markers found in requirements.txt")
+                    self.print_status("", "INFO")
+                    self.print_status("🔧 Git conflict markers detected in requirements.txt!", "ERROR")
+                    self.print_status("This usually happens when a Git merge conflict wasn't properly resolved.", "INFO")
+                    self.print_status("", "INFO")
+                    self.print_status("TO FIX:", "INFO")
+                    self.print_status("1. Edit requirements.txt in a text editor", "INFO")
+                    self.print_status("2. Look for and remove lines containing: <<<<<<<, =======, >>>>>>>", "INFO")
+                    self.print_status("3. Choose the correct package versions", "INFO")
+                    self.print_status("4. Run this setup script again", "INFO")
+                    self.print_status("", "INFO")
+                    self.print_status("For automated help: python scripts/git_conflict_resolver.py", "INFO")
+                else:
+                    self.issues.append(f"Failed to install dependencies: {result.stderr}")
                 return False
 
             self.print_status("Dependencies installed ✓", "SUCCESS")
