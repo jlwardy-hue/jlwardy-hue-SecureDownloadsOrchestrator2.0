@@ -624,6 +624,180 @@ tar -czf orchestrator-debug-$(date +%Y%m%d-%H%M).tar.gz -C /tmp orchestrator-deb
 
 ---
 
+## 6. Git and Version Control Issues
+
+### 6.1 Embedded Repository Error
+
+#### Symptoms
+```bash
+warning: adding embedded git repository: jlwardy-hue-SecureDownloadsOrchestrator2.0
+hint: You've added another git repository inside your current repository.
+```
+
+#### Cause
+You accidentally cloned or created a git repository inside your working directory.
+
+#### Solutions
+
+**1. Remove Embedded Repository**
+```bash
+# Find embedded repositories
+find . -name ".git" -type d
+
+# Remove embedded repository (CAREFUL!)
+rm -rf ./jlwardy-hue-SecureDownloadsOrchestrator2.0/.git
+
+# Or remove the entire embedded directory if it's duplicate
+rm -rf ./jlwardy-hue-SecureDownloadsOrchestrator2.0/
+```
+
+**2. Use Submodule (if intentional)**
+```bash
+# Remove from git index
+git rm --cached jlwardy-hue-SecureDownloadsOrchestrator2.0
+
+# Add as submodule instead
+git submodule add https://github.com/jlwardy-hue/jlwardy-hue-SecureDownloadsOrchestrator2.0.git
+```
+
+### 6.2 Push Rejected (Non-Fast-Forward)
+
+#### Symptoms
+```bash
+! [rejected]        main -> main (non-fast-forward)
+error: failed to push some refs
+hint: Updates were rejected because the tip of your current branch is behind
+```
+
+#### Solutions
+
+**1. Safe Merge (Recommended)**
+```bash
+# Fetch latest changes
+git fetch origin main
+
+# Merge remote changes
+git merge origin/main
+
+# Or use rebase for cleaner history
+git rebase origin/main
+
+# Push after resolving conflicts
+git push origin main
+```
+
+**2. Force Push (DANGEROUS - Use with caution)**
+```bash
+# Only if you're sure you want to overwrite remote
+git push --force-with-lease origin main
+```
+
+### 6.3 AI Integration Already Exists
+
+#### Issue
+The repository already has comprehensive OpenAI integration built-in.
+
+#### Check Existing Features
+```bash
+# Verify AI integration is present
+grep -r "openai\|ai_classification" . --exclude-dir=.git
+
+# Check configuration
+cat config.yaml | grep -A 10 "ai_classification"
+
+# Run setup verification
+python scripts/setup.py --verify
+```
+
+#### Existing AI Features
+- ✅ OpenAI API integration in `orchestrator/classifier.py`
+- ✅ AI classification configuration in `config.yaml`
+- ✅ Comprehensive test coverage in `tests/unit/test_classifier.py`
+- ✅ Environment variable support (`OPENAI_API_KEY`)
+- ✅ Error handling and fallback mechanisms
+
+#### Enable AI Features
+```bash
+# Set API key
+export OPENAI_API_KEY="your-api-key-here"
+
+# Enable in config.yaml
+processing:
+  enable_ai_classification: true
+
+ai_classification:
+  provider: "openai"
+  model: "gpt-3.5-turbo"
+```
+
+### 6.4 Development Workflow Best Practices
+
+#### Proper Git Workflow
+```bash
+# 1. Always work on feature branches
+git checkout -b feature/your-feature-name
+
+# 2. Fetch latest changes before starting work
+git fetch origin main
+git merge origin/main
+
+# 3. Make focused commits
+git add specific_files
+git commit -m "descriptive message"
+
+# 4. Test before pushing
+python scripts/setup.py --verify
+# Run tests if available
+
+# 5. Push feature branch
+git push origin feature/your-feature-name
+
+# 6. Create pull request on GitHub
+```
+
+#### Avoiding Common Git Issues
+```bash
+# Check status before committing
+git status
+
+# Review changes before adding
+git diff
+
+# Use .gitignore effectively
+git check-ignore path/to/file
+
+# Prevent embedded repositories
+# (already configured in .gitignore)
+```
+
+### 6.5 Repository Recovery
+
+#### Corrupted Working Directory
+```bash
+# Reset to last known good state
+git reset --hard HEAD
+
+# Clean untracked files (be careful)
+git clean -fd
+
+# Verify repository integrity
+git fsck
+```
+
+#### Branch Recovery
+```bash
+# Find lost commits
+git reflog
+
+# Recover specific commit
+git checkout -b recovery-branch commit-hash
+
+# Restore deleted branch
+git branch recovered-branch HEAD@{n}
+```
+
+---
+
 ## Getting Help
 
 ### Before Contacting Support
