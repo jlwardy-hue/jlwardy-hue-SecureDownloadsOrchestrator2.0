@@ -1,5 +1,4 @@
 import logging
-import time
 
 from watchdog.events import FileCreatedEvent, FileModifiedEvent, FileSystemEventHandler
 from watchdog.observers import Observer

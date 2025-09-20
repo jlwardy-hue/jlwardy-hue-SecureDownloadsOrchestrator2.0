@@ -11,7 +11,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, List, Union
+from typing import Any, Dict, Optional, List
 
 from orchestrator.file_type_detector import FileTypeDetector
 
