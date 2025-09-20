@@ -3,6 +3,9 @@ watchdog>=3.0.0          # File system monitoring
 PyYAML>=6.0.1           # Configuration file parsing
 python-magic>=0.4.27    # File type detection via magic numbers
 
+# AI Classification dependencies
+openai>=1.0.0           # OpenAI API for AI-powered file classification
+
 # Pipeline dependencies
 pytesseract>=0.3.13     # OCR for metadata extraction
 Pillow>=10.0.0          # Image processing

@@ -115,7 +115,7 @@ def handle_new_file(filepath, logger, config=None):
         else:
             # Fallback to simple classification
             logger.info("Using simple classification (unified pipeline disabled)")
-            file_category = classify_file(filepath, logger)
+            file_category = classify_file(filepath, config, logger)
             logger.info(f"File classification complete: {filepath} -> {file_category}")
 
             # TODO: Future processing steps based on classification:
