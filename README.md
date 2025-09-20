@@ -459,6 +459,50 @@ Automated dependency updates for:
 
 ## 🤖 AI & Copilot Integration
 
+### ✅ Built-in OpenAI Integration
+
+SecureDownloadsOrchestrator 2.0 **already includes comprehensive OpenAI integration**:
+
+#### Features Available Now
+- **AI-Powered Classification**: Uses OpenAI GPT models for intelligent file categorization
+- **Content Analysis**: Analyzes file content for better classification decisions
+- **Configurable Models**: Support for different OpenAI models (gpt-3.5-turbo, gpt-4, etc.)
+- **Error Handling**: Robust fallback to rule-based classification if AI fails
+- **Environment Security**: API keys managed via environment variables
+
+#### Quick Setup
+```bash
+# 1. Set your OpenAI API key
+export OPENAI_API_KEY="your-api-key-here"
+
+# 2. Enable AI in config.yaml
+processing:
+  enable_ai_classification: true
+
+ai_classification:
+  provider: "openai"
+  model: "gpt-3.5-turbo"
+  endpoint: "https://api.openai.com/v1"
+
+# 3. Run the application
+python -m orchestrator.main
+```
+
+#### Verification
+```bash
+# Check if AI integration is working
+python scripts/setup.py --verify
+grep -r "openai" orchestrator/ --include="*.py"
+
+# Test AI classification (requires API key)
+python -c "
+from orchestrator.classifier import FileClassifier
+config = {'ai_classification': {'provider': 'openai'}}
+classifier = FileClassifier(config)
+print('AI integration:', 'ENABLED' if classifier._ai_enabled else 'DISABLED')
+"
+```
+
 ### GitHub Copilot Usage
 
 This project is optimized for GitHub Copilot assistance:
@@ -468,20 +512,22 @@ This project is optimized for GitHub Copilot assistance:
 - **Testing**: Consistent test patterns for Copilot-assisted test generation
 - **Configuration**: Clear configuration schemas for AI-assisted setup
 
-### AI-Ready Architecture
+### Existing AI Architecture
 
-The system is designed for future AI integrations:
+The AI integration is production-ready with enterprise features:
 
 ```python
-# Example: AI classification hook
-def handle_new_file(filepath, logger):
-    # Current: Rule-based classification
-    file_category = classify_file(filepath, logger)
+# Already implemented in orchestrator/classifier.py
+class FileClassifier:
+    def __init__(self, categories_config: Dict[str, Any]):
+        # AI initialization already handled
+        self._initialize_openai_client()
     
-    # Future: AI-enhanced classification
-    if config.get('processing', {}).get('enable_ai_classification'):
-        ai_category = ai_classify_file(filepath)
-        file_category = merge_classifications(file_category, ai_category)
+    def classify_with_ai(self, file_content: str, filename: str) -> Optional[str]:
+        """AI classification already implemented with error handling"""
+        # Uses OpenAI GPT for intelligent classification
+        # Includes JSON response parsing and validation
+        # Has comprehensive error handling and logging
 ```
 
 ### Copilot Best Practices for Contributors
@@ -491,6 +537,18 @@ def handle_new_file(filepath, logger):
 3. **Include docstrings**: Provides context for better code generation
 4. **Follow consistent patterns**: Enables Copilot to learn project conventions
 5. **Comment complex logic**: Helps Copilot generate appropriate tests
+
+### ⚠️ Before Adding AI Features
+
+**Check if the feature already exists!** The repository includes:
+- ✅ OpenAI API integration (`orchestrator/classifier.py`)
+- ✅ Configuration management (`config.yaml`)
+- ✅ Comprehensive test coverage (`tests/unit/test_classifier.py`)
+- ✅ Error handling and fallbacks
+- ✅ Environment variable security
+- ✅ Multi-model support
+
+See `AI_INTEGRATION_GUIDE.md` for detailed AI capabilities and usage examples.
 
 ## 🤝 Contributing
 
@@ -533,9 +591,10 @@ We welcome contributions! Please see our contributing guidelines:
 ## 📚 Additional Documentation
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)**: Detailed system architecture and design decisions
-- **[API Documentation](docs/api.md)**: Detailed API reference (coming soon)
-- **[Configuration Guide](docs/configuration.md)**: Advanced configuration options (coming soon)
-- **[Troubleshooting Guide](docs/troubleshooting.md)**: Common issues and solutions (coming soon)
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)**: Common issues and solutions including git problems
+- **[GIT_WORKFLOW.md](GIT_WORKFLOW.md)**: Git best practices and development workflow
+- **[AI_INTEGRATION_GUIDE.md](AI_INTEGRATION_GUIDE.md)**: Comprehensive AI features and usage
+- **[DEPLOYMENT.md](DEPLOYMENT.md)**: Production deployment guide
 
 ## 🔒 Security
 

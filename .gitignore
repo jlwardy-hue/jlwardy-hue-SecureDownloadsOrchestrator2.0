@@ -91,3 +91,18 @@ runner-health-report*.txt
 # Backup files
 *.bak
 *.backup
+
+# Git and version control
+.git/
+*.orig
+*.rej
+
+# Prevent embedded repositories (common cause of git issues)
+*/SecureDownloadsOrchestrator*/
+*SecureDownloadsOrchestrator2.0/
+jlwardy-hue-SecureDownloadsOrchestrator*/
+
+# Temporary development directories
+local_dev/
+dev_workspace/
+workspace/
