@@ -200,7 +200,6 @@ class FileClassifier:
     def _initialize_openai_client(self) -> None:
         """Initialize OpenAI client if configuration is valid."""
         try:
-            import os
 
             import openai
 
