@@ -45,3 +45,70 @@ processing:
   enable_ocr: true
   enable_archive_extraction: true
   enable_unified_pipeline: true
+
+# AI-powered file classification using OpenAI GPT
+# Set OPENAI_API_KEY environment variable to enable GPT classification
+ai_classification:
+  # Enable/disable GPT-powered classification (requires OPENAI_API_KEY environment variable)
+  enabled: false
+  
+  # OpenAI API configuration
+  model: "gpt-3.5-turbo"  # GPT model to use: gpt-3.5-turbo, gpt-4, gpt-4-turbo, etc.
+  max_tokens: 1000        # Maximum tokens in the response
+  temperature: 0.1        # Lower temperature for more consistent responses
+  
+  # File content limits for GPT analysis
+  max_file_size_bytes: 1048576  # 1MB - maximum file size to send to GPT
+  max_content_length: 8000      # Maximum characters of file content to include in prompt
+  
+  # Supported file types for GPT analysis (based on MIME types)
+  supported_mime_types:
+    - "text/plain"
+    - "text/markdown"
+    - "text/html"
+    - "text/css"
+    - "text/javascript"
+    - "application/javascript"
+    - "application/json"
+    - "application/xml"
+    - "text/xml"
+    - "text/csv"
+    - "application/x-python"
+    - "text/x-python"
+    - "text/x-script.python"
+  
+  # GPT prompt template for file classification
+  # Available placeholders: {filename}, {file_extension}, {mime_type}, {file_size}, {file_content}
+  prompt_template: |
+    You are an expert file analyzer. Analyze the following file and provide a comprehensive classification and analysis.
+    
+    File Information:
+    - Filename: {filename}
+    - Extension: {file_extension}
+    - MIME Type: {mime_type}
+    - Size: {file_size} bytes
+    
+    File Content (first {max_content_length} characters):
+    ```
+    {file_content}
+    ```
+    
+    Please analyze this file and respond with a JSON object containing:
+    1. "category": Primary file category (document, code, data, config, script, etc.)
+    2. "subcategory": More specific classification (python_script, html_document, json_config, etc.)
+    3. "programming_language": If it's code, specify the language (or null if not applicable)
+    4. "summary": Brief 1-2 sentence description of the file's purpose/content
+    5. "key_technologies": Array of technologies/frameworks detected (e.g., ["React", "CSS3"])
+    6. "sensitive_data_indicators": Array of potential sensitive data types found (e.g., ["email_addresses", "api_keys", "passwords"])
+    7. "confidence_score": Float between 0-1 indicating classification confidence
+    8. "metadata": Object with additional relevant information
+    
+    Respond ONLY with valid JSON, no other text or explanations.
+
+  # Fallback behavior when GPT classification fails
+  fallback_to_rule_based: true  # Use traditional rule-based classification as fallback
+  
+  # Logging configuration for GPT interactions
+  log_prompts: false       # Log the full prompts sent to GPT (useful for debugging)
+  log_responses: false     # Log the full GPT responses (useful for debugging)
+  log_errors: true         # Always log GPT-related errors
