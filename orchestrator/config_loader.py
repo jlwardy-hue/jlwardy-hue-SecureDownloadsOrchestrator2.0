@@ -1,7 +1,7 @@
 import os
 from copy import deepcopy
 
-import yaml
+import yaml  # type: ignore
 
 
 def deep_merge_dicts(a, b):

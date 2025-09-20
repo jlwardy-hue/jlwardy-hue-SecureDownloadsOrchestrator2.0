@@ -2,7 +2,7 @@
 File classification module for SecureDownloadsOrchestrator 2.0
 
 Provides file classification functionality using file extensions, magic numbers,
-and advanced AI-powered operations via OpenAI GPT including classification, 
+and advanced AI-powered operations via OpenAI GPT including classification,
 summarization, sensitive information detection, and metadata extraction.
 """
 
@@ -17,16 +17,57 @@ from orchestrator.file_type_detector import FileTypeDetector
 
 
 class FileClassifier:
+    def _select_ai_skills(self, skills: Optional[List[str]]) -> List[str]:
+        ai_config = self.config.get("ai_classification", {})
+        skills_config = ai_config.get("skills", {})
+        if skills is None:
+            # Use all enabled skills
+            return [
+                skill
+                for skill, config in skills_config.items()
+                if config.get("enabled", False)
+            ]
+        return skills
+
+    def _extract_content_for_ai(self, filepath: str) -> Optional[str]:
+        content = None
+        if self._is_text_file(filepath):
+            content = self._read_file_content(filepath)
+        if not content and self._should_use_ocr_for_file(filepath):
+            self.logger.info(f"Attempting OCR text extraction for {filepath}")
+            content = self._extract_text_with_ocr(filepath)
+        return content
+
+    def _apply_ai_skills(
+        self, skills: List[str], filepath: str, content: Optional[str]
+    ) -> dict:
+        results = {}
+        for skill in skills:
+            try:
+                skill_result = self._call_ai_skill(skill, filepath, content or "")
+                if skill_result:
+                    results[skill] = skill_result
+                else:
+                    results[skill] = {
+                        "error": f"AI {skill} failed or returned invalid response"
+                    }
+            except Exception as e:
+                self.logger.error(
+                    f"Error applying AI skill '{skill}' to {filepath}: {e}"
+                )
+                results[skill] = {"error": str(e)}
+        return results
+
     """
     Advanced file classifier with multi-skill AI capabilities.
-    
+
     Supports traditional file classification via extensions and magic numbers,
     plus advanced AI-powered operations including:
     - File classification with confidence scoring
-    - Content summarization  
+    - Content summarization
     - Sensitive information detection
     - Metadata extraction
-    
+
     All AI operations support configurable prompt templates and JSON output parsing.
     """
 
@@ -340,7 +381,7 @@ class FileClassifier:
     def _classify_with_ai(self, filepath: str, content: str) -> Optional[str]:
         """
         Classify file content using OpenAI GPT with enhanced JSON response parsing.
-        
+
         This method maintains backward compatibility while leveraging the new
         multi-skill AI framework for improved classification accuracy.
         """
@@ -349,19 +390,32 @@ class FileClassifier:
 
         try:
             # Try the new JSON-based classification first
-            classification_result = self._call_ai_skill("classification", filepath, content)
-            
+            classification_result = self._call_ai_skill(
+                "classification", filepath, content
+            )
+
             if classification_result and "category" in classification_result:
                 category = classification_result["category"].lower()
                 confidence = classification_result.get("confidence", "unknown")
-                reasoning = classification_result.get("reasoning", "No reasoning provided")
-                
+                reasoning = classification_result.get(
+                    "reasoning", "No reasoning provided"
+                )
+
                 # Validate the category
                 valid_categories = {
-                    "document", "image", "audio", "video", "archive", "code", 
-                    "executable", "pdf", "spreadsheet", "presentation", "unknown"
+                    "document",
+                    "image",
+                    "audio",
+                    "video",
+                    "archive",
+                    "code",
+                    "executable",
+                    "pdf",
+                    "spreadsheet",
+                    "presentation",
+                    "unknown",
                 }
-                
+
                 if category in valid_categories:
                     self.logger.info(
                         f"AI classified {os.path.basename(filepath)} as '{category}' "
@@ -373,20 +427,24 @@ class FileClassifier:
                         f"AI returned invalid category '{category}' for {filepath}. "
                         f"Full response: {classification_result}"
                     )
-            
+
             # Fallback to legacy classification method if JSON classification fails
-            self.logger.debug(f"Falling back to legacy AI classification for {filepath}")
+            self.logger.debug(
+                f"Falling back to legacy AI classification for {filepath}"
+            )
             return self._legacy_classify_with_ai(filepath, content)
-            
+
         except Exception as e:
-            self.logger.error(f"Error in enhanced AI classification for {filepath}: {e}")
+            self.logger.error(
+                f"Error in enhanced AI classification for {filepath}: {e}"
+            )
             # Try legacy method as final fallback
             return self._legacy_classify_with_ai(filepath, content)
 
     def _legacy_classify_with_ai(self, filepath: str, content: str) -> Optional[str]:
         """
         Legacy AI classification method for backward compatibility.
-        
+
         This method uses the original simple prompt-response approach.
         """
         try:
@@ -403,9 +461,11 @@ class FileClassifier:
                 f"Content preview:\n{content[:1000]}..."
             )
 
-            self.logger.debug(f"Sending legacy AI classification request for {filepath}")
+            self.logger.debug(
+                f"Sending legacy AI classification request for {filepath}"
+            )
 
-            response = self._openai_client.chat.completions.create(
+            response = self._openai_client.chat.completions.create(  # type: ignore[union-attr]
                 model=model,
                 messages=[
                     {
@@ -423,8 +483,17 @@ class FileClassifier:
 
             # Validate the response
             valid_categories = {
-                "document", "image", "audio", "video", "archive", "code",
-                "executable", "pdf", "spreadsheet", "presentation", "unknown"
+                "document",
+                "image",
+                "audio",
+                "video",
+                "archive",
+                "code",
+                "executable",
+                "pdf",
+                "spreadsheet",
+                "presentation",
+                "unknown",
             }
 
             if ai_category not in valid_categories:
@@ -440,15 +509,17 @@ class FileClassifier:
             self.logger.error(f"Error in legacy AI classification for {filepath}: {e}")
             return None
 
-    def _prepare_ai_prompt(self, skill: str, filepath: str, content: str) -> Optional[str]:
+    def _prepare_ai_prompt(
+        self, skill: str, filepath: str, content: str
+    ) -> Optional[str]:
         """
         Prepare AI prompt using configurable templates.
-        
+
         Args:
             skill: The AI skill to use (classification, summarization, etc.)
             filepath: Path to the file being analyzed
             content: File content to analyze
-            
+
         Returns:
             Formatted prompt string or None if skill not configured
         """
@@ -456,153 +527,186 @@ class FileClassifier:
             ai_config = self.config.get("ai_classification", {})
             skills_config = ai_config.get("skills", {})
             skill_config = skills_config.get(skill, {})
-            
+
             if not skill_config.get("enabled", False):
                 self.logger.debug(f"AI skill '{skill}' is not enabled")
                 return None
-                
+
             prompt_template = skill_config.get("prompt_template", "")
             if not prompt_template:
-                self.logger.warning(f"No prompt template configured for AI skill '{skill}'")
+                self.logger.warning(
+                    f"No prompt template configured for AI skill '{skill}'"
+                )
                 return None
-                
+
             # Format the prompt with file information
             filename = os.path.basename(filepath)
             formatted_prompt = prompt_template.format(
                 filename=filename,
-                content=content[:ai_config.get("max_content_length", 2048)]
+                content=content[: ai_config.get("max_content_length", 2048)],
             )
-            
+
             return formatted_prompt
-            
+
         except Exception as e:
             self.logger.error(f"Error preparing AI prompt for skill '{skill}': {e}")
             return None
 
-    def _call_ai_skill(self, skill: str, filepath: str, content: str) -> Optional[Dict[str, Any]]:
+    def _call_ai_skill(
+        self, skill: str, filepath: str, content: str
+    ) -> Optional[Dict[str, Any]]:
         """
         Call a specific AI skill with the given content.
-        
+
         Args:
             skill: The AI skill to execute
             filepath: Path to the file being analyzed
             content: File content to analyze
-            
+
         Returns:
             Parsed JSON response from AI or None if failed
         """
         if not self._ai_enabled or not self._openai_client:
             return None
-            
+
         try:
             # Prepare the prompt
             prompt = self._prepare_ai_prompt(skill, filepath, content)
             if not prompt:
                 return None
-                
+
             ai_config = self.config.get("ai_classification", {})
             skills_config = ai_config.get("skills", {})
             skill_config = skills_config.get(skill, {})
-            
+
             model = ai_config.get("model", "gpt-3.5-turbo")
             timeout = ai_config.get("timeout", 30)
             max_tokens = skill_config.get("max_tokens", 200)
             temperature = skill_config.get("temperature", 0.1)
-            
+
             # Log the request (without sensitive content)
             prompt_summary = f"skill={skill}, model={model}, max_tokens={max_tokens}, temp={temperature}"
-            self.logger.debug(f"Sending AI {skill} request for {os.path.basename(filepath)} ({prompt_summary})")
-            
+            self.logger.debug(
+                f"Sending AI {skill} request for {os.path.basename(filepath)} ({prompt_summary})"
+            )
+
             # Optionally log prompt structure for debugging (but not actual content)
             if self.logger.isEnabledFor(logging.DEBUG):
-                prompt_lines = prompt.split('\n')
-                prompt_structure = f"Prompt has {len(prompt_lines)} lines, {len(prompt)} chars"
+                prompt_lines = prompt.split("\n")
+                prompt_structure = (
+                    f"Prompt has {len(prompt_lines)} lines, {len(prompt)} chars"
+                )
                 self.logger.debug(f"AI {skill} prompt structure: {prompt_structure}")
-            
+
             # Record start time for performance logging
             start_time = time.time()
-            
+
             # Make the API call
-            response = self._openai_client.chat.completions.create(
-                model=model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": f"You are an AI assistant specializing in {skill}. Always respond with valid JSON.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                max_tokens=max_tokens,
-                temperature=temperature,
-                timeout=timeout,
-            )
-            
+            if self._openai_client is not None and hasattr(self._openai_client, "chat"):
+                response = self._openai_client.chat.completions.create(  # type: ignore[union-attr]
+                    model=model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": f"You are an AI assistant specializing in {skill}. Always respond with valid JSON.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    timeout=timeout,
+                )
+            else:
+                self.logger.error("OpenAI client is not properly initialized or missing 'chat' attribute.")
+                return None
+
             # Calculate response time
             response_time = time.time() - start_time
-            
+
             # Extract and parse the response
             ai_response_text = response.choices[0].message.content.strip()
-            
+
             # Log the successful response (sanitized)
             response_summary = f"response_time={response_time:.2f}s, response_length={len(ai_response_text)}chars"
-            self.logger.debug(f"AI {skill} response received for {os.path.basename(filepath)} ({response_summary})")
-            
+            self.logger.debug(
+                f"AI {skill} response received for {os.path.basename(filepath)} ({response_summary})"
+            )
+
             # Parse JSON response
             try:
                 ai_response_json = json.loads(ai_response_text)
-                
+
                 # Log successful parsing with key structure (but not values)
-                keys = list(ai_response_json.keys()) if isinstance(ai_response_json, dict) else []
+                keys = (
+                    list(ai_response_json.keys())
+                    if isinstance(ai_response_json, dict)
+                    else []
+                )
                 self.logger.info(
                     f"AI {skill} completed successfully for {os.path.basename(filepath)} "
                     f"(response keys: {keys})"
                 )
                 return ai_response_json
-                
+
             except json.JSONDecodeError as e:
                 # Log JSON parsing error with limited response preview
-                response_preview = ai_response_text[:100].replace('\n', '\\n')
+                response_preview = ai_response_text[:100].replace("\n", "\\n")
                 self.logger.error(
                     f"Failed to parse AI {skill} JSON response for {os.path.basename(filepath)}: {e}. "
                     f"Response preview: {response_preview}..."
                 )
                 return None
-                
+
         except Exception as e:
             self.logger.error(f"Error in AI {skill} for {filepath}: {e}")
             return None
 
-    def _should_use_ocr_for_file(self, filepath: str, mime_type: Optional[str] = None) -> bool:
+    def _should_use_ocr_for_file(
+        self, filepath: str, mime_type: Optional[str] = None
+    ) -> bool:
         """
         Determine if OCR should be used for non-text files.
-        
+
         Args:
             filepath: Path to the file
             mime_type: MIME type of the file
-            
+
         Returns:
             True if OCR should be attempted
         """
         try:
             processing_config = self.config.get("processing", {})
             ai_multi_skill_config = processing_config.get("ai_multi_skill", {})
-            
+
             if not ai_multi_skill_config.get("ocr_for_non_text", True):
                 return False
-                
+
             # Check if file is an image or PDF that might benefit from OCR
             if mime_type:
                 ocr_candidate_types = [
-                    "image/jpeg", "image/png", "image/tiff", "image/bmp",
-                    "application/pdf", "image/gif"
+                    "image/jpeg",
+                    "image/png",
+                    "image/tiff",
+                    "image/bmp",
+                    "application/pdf",
+                    "image/gif",
                 ]
                 return mime_type in ocr_candidate_types
-                
+
             # Fallback to extension check
             file_path = Path(filepath)
-            ocr_extensions = {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".bmp", ".pdf", ".gif"}
+            ocr_extensions = {
+                ".jpg",
+                ".jpeg",
+                ".png",
+                ".tiff",
+                ".tif",
+                ".bmp",
+                ".pdf",
+                ".gif",
+            }
             return file_path.suffix.lower() in ocr_extensions
-            
+
         except Exception as e:
             self.logger.warning(f"Error checking OCR eligibility for {filepath}: {e}")
             return False
@@ -610,34 +714,38 @@ class FileClassifier:
     def _extract_text_with_ocr(self, filepath: str) -> Optional[str]:
         """
         Extract text from non-text files using OCR.
-        
+
         Args:
             filepath: Path to the file
-            
+
         Returns:
             Extracted text or None if failed
         """
         try:
             # This is a placeholder for OCR integration
             # In a real implementation, this would use pytesseract or similar
-            self.logger.info(f"OCR text extraction attempted for {filepath} (placeholder)")
-            
+            self.logger.info(
+                f"OCR text extraction attempted for {filepath} (placeholder)"
+            )
+
             # For now, return None to indicate OCR is not available
             # When implementing, add actual OCR logic here
             return None
-            
+
         except Exception as e:
             self.logger.warning(f"OCR extraction failed for {filepath}: {e}")
             return None
 
-    def analyze_file_with_ai(self, filepath: str, skills: Optional[List[str]] = None) -> Dict[str, Any]:
+    def analyze_file_with_ai(
+        self, filepath: str, skills: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
         """
         Perform comprehensive AI analysis of a file using multiple skills.
-        
+
         Args:
             filepath: Path to the file to analyze
             skills: List of skills to apply, or None for all enabled skills
-            
+
         Returns:
             Dictionary containing results from all applied skills
         """
@@ -658,6 +766,7 @@ class FileClassifier:
         """Validate preconditions for AI analysis."""
         if not os.path.isfile(filepath):
             self.logger.warning(f"Cannot analyze non-existent file: {filepath}")
+<<<<<<< Updated upstream
             return False
             
         if not self._ai_enabled:
@@ -720,15 +829,36 @@ class FileClassifier:
                     self.logger.error(f"Error applying AI skill '{skill}' to {filepath}: {e}")
                     results[skill] = {"error": str(e)}
                     
+=======
+            return {}
+
+        if not self._ai_enabled:
+            self.logger.debug("AI analysis requested but AI is not enabled")
+            return {}
+
+        try:
+            selected_skills = self._select_ai_skills(skills)
+            if not selected_skills:
+                self.logger.debug(f"No AI skills enabled for file analysis: {filepath}")
+                return {}
+
+            content = self._extract_content_for_ai(filepath)
+            if not content:
+                self.logger.warning(
+                    f"No readable content found for AI analysis: {filepath}. "
+                    "File may be binary or OCR unavailable."
+                )
+                return {}
+
+            results = self._apply_ai_skills(selected_skills, filepath, content)
+>>>>>>> Stashed changes
             self.logger.info(
                 f"AI analysis completed for {filepath}. "
-                f"Applied {len(skills)} skills, {len([r for r in results.values() if 'error' not in r])} successful."
+                f"Applied {len(selected_skills)} skills, {len([r for r in results.values() if 'error' not in r])} successful."
             )
-            
         except Exception as e:
             self.logger.error(f"Error in comprehensive AI analysis for {filepath}: {e}")
-            results["error"] = str(e)
-            
+            return {"error": str(e)}
         return results
 
     def _get_file_extension(self, filepath: str) -> str:
@@ -803,8 +933,8 @@ class FileClassifier:
             extension = self._get_file_extension(filepath)
 
             # Get traditional classification
-            extension_category, mime_category, metadata = self._get_traditional_classification(
-                filepath, extension
+            extension_category, mime_category, metadata = (
+                self._get_traditional_classification(filepath, extension)
             )
 
             # Determine final category with traditional logic
@@ -873,13 +1003,13 @@ def analyze_file_with_ai(
 ) -> Dict[str, Any]:
     """
     Convenience function to perform comprehensive AI analysis without creating a classifier instance.
-    
+
     Args:
         filepath: Path to the file to analyze
         skills: List of AI skills to apply (None for all enabled skills)
         config: Optional configuration dictionary containing AI settings
         logger: Optional logger instance
-        
+
     Returns:
         Dictionary containing results from all applied AI skills
     """

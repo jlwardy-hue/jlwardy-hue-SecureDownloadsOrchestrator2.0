@@ -14,8 +14,8 @@ provides robust error handling and comprehensive logging.
 """
 
 import logging
-import os
 import re
+import os
 import shutil
 import subprocess
 import tarfile
@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, List
 
 try:
-    import pytesseract
+    import pytesseract  # type: ignore
     from PIL import Image
 
     TESSERACT_AVAILABLE = True
@@ -49,7 +49,7 @@ class SecurityScanResult:
     """Result of a security scan operation."""
 
     def __init__(
-        self, is_clean: bool, threat_name: str = None, scan_output: str = None
+        self, is_clean: bool, threat_name: Optional[str] = None, scan_output: Optional[str] = None
     ):
         self.is_clean = is_clean
         self.threat_name = threat_name
@@ -83,7 +83,7 @@ class OCRMetadata:
 class ProcessingResult:
     """Result of file processing operation."""
 
-    def __init__(self, success: bool, final_path: str = None, error: str = None):
+    def __init__(self, success: bool, final_path: Optional[str] = None, error: Optional[str] = None):
         self.success = success
         self.final_path = final_path
         self.error = error
@@ -92,6 +92,234 @@ class ProcessingResult:
 
 
 class UnifiedFileProcessor:
+    def _extract_date_from_text(self, text: str):
+        date_patterns = [
+            r"\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b",  # MM/DD/YYYY or DD/MM/YYYY
+            r"\b(\d{4}[/-]\d{1,2}[/-]\d{1,2})\b",  # YYYY/MM/DD
+            r"\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2},?\s+\d{4}\b",
+            r"\b(\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+\d{4})\b",
+        ]
+        for pattern in date_patterns:
+            match = re.search(pattern, text)
+            if match:
+                try:
+                    date_str = match.group(1) if match.lastindex else match.group(0)
+                    date_formats = [
+                        "%m/%d/%Y",
+                        "%d/%m/%Y",
+                        "%Y/%m/%d",
+                        "%Y-%m-%d",
+                        "%m-%d-%Y",
+                        "%d-%m-%Y",
+                        "%B %d, %Y",
+                        "%d %b %Y",
+                    ]
+                    for fmt in date_formats:
+                        try:
+                            return datetime.strptime(date_str, fmt)
+                        except Exception:
+                            continue
+                except Exception:
+                    continue
+        return None
+
+    def _extract_sender_from_text(self, text: str):
+        sender_patterns = [
+            r"\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b",  # Email
+            r"\bfrom[:\s]+([a-zA-Z\s]+)\b",  # "From: Name"
+            r"\bsender[:\s]+([a-zA-Z\s]+)\b",  # "Sender: Name"
+        ]
+        for pattern in sender_patterns:
+            match = re.search(pattern, text)
+            if match:
+                return match.group(1).strip()
+        return None
+
+    def _extract_business_context_from_text(self, text: str, business_keywords):
+        for keyword in business_keywords:
+            if keyword in text:
+                return keyword
+        return None
+
+    def _calculate_confidence(self, metadata: OCRMetadata):
+        confidence = 0.0
+        if metadata.date_detected:
+            confidence += 0.3
+        if metadata.sender:
+            confidence += 0.4
+        if metadata.business_context:
+            confidence += 0.3
+        return confidence
+
+    def _get_images_for_ocr(self, filepath: str):
+        images = []
+        file_ext = Path(filepath).suffix.lower()
+        if file_ext in [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"]:
+            images.append(Image.open(filepath))
+        elif file_ext == ".pdf" and PDF2IMAGE_AVAILABLE:
+            try:
+                pdf_images = convert_from_path(filepath)
+                # mypy expects Iterable[ImageFile], so cast to list[Image] and ignore type
+                images.extend(list(pdf_images)[:3])  # type: ignore
+            except Exception as e:
+                self.logger.warning(f"Failed to convert PDF to images: {e}")
+                return None
+        else:
+            return None
+        return images
+
+    def _perform_ocr_on_images(self, images):
+        all_text = []
+        for i, image in enumerate(images):
+            try:
+                text = pytesseract.image_to_string(image)
+                if text.strip():
+                    all_text.append(text)
+                    self.logger.debug(
+                        f"OCR text extracted from page {i + 1}: {len(text)} characters"
+                    )
+            except Exception as e:
+                self.logger.warning(f"OCR failed for image {i + 1}: {e}")
+        return all_text
+
+    def _combine_ocr_texts(self, all_text):
+        return "\n".join(all_text)
+
+    def _extract_and_validate_archive(self, filepath: str, temp_path: Path):
+        try:
+            if filepath.lower().endswith((".zip", ".jar")):
+                self._extract_zip_with_protection(filepath, temp_path)
+            elif filepath.lower().endswith((".tar", ".tar.gz", ".tgz", ".tar.bz2")):
+                self._extract_tar_with_protection(filepath, temp_path)
+            else:
+                return False, "Unsupported archive format"
+            return True, None
+        except ArchiveBombError as e:
+            self.logger.warning(f"Archive bomb detected: {filepath} - {e}")
+            scan_result = SecurityScanResult(False, "ArchiveBomb", str(e))
+            return False, scan_result
+
+    def _count_and_validate_extracted_files(self, temp_path: Path):
+        total_extracted_size = 0
+        file_count = 0
+        for root, dirs, files in os.walk(temp_path):
+            depth = len(Path(root).relative_to(temp_path).parts)
+            if depth > self.archive_limits["max_depth"]:
+                raise ArchiveBombError(
+                    f"Archive depth {depth} exceeds limit {self.archive_limits['max_depth']}"
+                )
+            for file in files:
+                file_count += 1
+                if file_count > self.archive_limits["max_files"]:
+                    raise ArchiveBombError(
+                        f"Archive file count {file_count} exceeds limit {self.archive_limits['max_files']}"
+                    )
+                file_path = Path(root) / file
+                if file_path.exists():
+                    file_size = file_path.stat().st_size
+                    total_extracted_size += file_size
+                    if file_size > self.archive_limits["max_file_size"]:
+                        raise ArchiveBombError(
+                            f"File size {file_size} exceeds limit {self.archive_limits['max_file_size']}"
+                        )
+                    if total_extracted_size > self.archive_limits["max_total_size"]:
+                        raise ArchiveBombError(
+                            f"Total extracted size {total_extracted_size} exceeds limit {self.archive_limits['max_total_size']}"
+                        )
+        return file_count, total_extracted_size
+
+    def _recursively_process_extracted_files(self, temp_path: Path):
+        extracted_files = []
+        for root, dirs, files in os.walk(temp_path):
+            for file in files:
+                extracted_file = os.path.join(root, file)
+                try:
+                    self._validate_extracted_file_path(extracted_file, temp_path)
+                    result = self.process_file(extracted_file)
+                    if result.success:
+                        extracted_files.append(result.final_path)
+                except (PathValidationError, Exception) as e:
+                    self.logger.error(
+                        f"Error processing extracted file {extracted_file}: {e}"
+                    )
+        return extracted_files
+
+    def _finalize_archive_processing(
+        self, filepath: str, extracted_files, total_extracted_size, file_count
+    ):
+        archive_final_path = self._organize_file(filepath, "archive", None)
+        self.logger.info(
+            f"Archive processing complete: {len(extracted_files)} files extracted"
+        )
+        result = ProcessingResult(True, archive_final_path)
+        result.metadata["extracted_files"] = extracted_files
+        result.metadata["total_extracted_size"] = total_extracted_size
+        result.metadata["file_count"] = file_count
+        return result
+
+    def _run_clamav_scan(self, filepath: str):
+        # Use absolute path for clamscan for security
+        clamscan_path = shutil.which("clamscan")
+        if not clamscan_path:
+            raise FileNotFoundError("clamscan not found in PATH")
+        return subprocess.run(
+            [clamscan_path, "--no-summary", filepath],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+    def _handle_clamav_result(self, result, filepath: str):
+        output = result.stdout + result.stderr
+        if result.returncode == 0:
+            self.logger.info(f"Security scan clean: {filepath}")
+            return SecurityScanResult(True, scan_output=output)
+        elif result.returncode == 1:
+            threat_match = re.search(r": (.+) FOUND", output)
+            threat_name = threat_match.group(1) if threat_match else "Unknown threat"
+            self.logger.warning(
+                f"Security threat detected in {filepath}: {threat_name}"
+            )
+            return SecurityScanResult(False, threat_name, output)
+        else:
+            self.logger.error(f"ClamAV scan error for {filepath}: {output}")
+            if self.fail_closed:
+                self.logger.warning(f"Scan error, failing closed for: {filepath}")
+                return SecurityScanResult(False, "ScanError", f"Scan error: {output}")
+            else:
+                return SecurityScanResult(True)
+
+    def _handle_scan_exception(self, e, filepath: str):
+        self.logger.error(f"Security scan error for {filepath}: {e}")
+        if self.fail_closed:
+            self.logger.warning(f"Scan exception, failing closed for: {filepath}")
+            return SecurityScanResult(False, "ScanException", f"Scan exception: {e}")
+        else:
+            return SecurityScanResult(True)
+
+    def _check_path_traversal(self, filepath: str):
+        if ".." in filepath or "~" in filepath:
+            raise PathValidationError(f"Path traversal detected in: {filepath}")
+
+    def _check_path_exists_and_file(self, resolved_path: Path, filepath: str):
+        if not resolved_path.exists():
+            raise PathValidationError(f"File does not exist: {filepath}")
+        if not resolved_path.is_file():
+            raise PathValidationError(f"Path is not a regular file: {filepath}")
+
+    def _is_path_allowed(self, resolved_path: Path) -> bool:
+        allowed_parents = [
+            self.source_dir.resolve(),
+            Path(tempfile.gettempdir()).resolve(),
+        ]
+        for allowed_parent in allowed_parents:
+            try:
+                resolved_path.relative_to(allowed_parent)
+                return True
+            except ValueError:
+                continue
+        return False
+
     """
     Unified file processing pipeline that handles the complete workflow
     from file detection to final organization.
@@ -183,13 +411,11 @@ class UnifiedFileProcessor:
 
     def _check_dependencies(self):
         """Check availability of system dependencies."""
-        # Check ClamAV
+        # Check ClamAV using absolute path
         try:
-            result = subprocess.run(
-                ["which", "clamscan"], capture_output=True, text=True, timeout=5
-            )
-            self.clamav_available = result.returncode == 0
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+            clamscan_path = shutil.which("clamscan")
+            self.clamav_available = clamscan_path is not None
+        except Exception:
             self.clamav_available = False
 
         if not self.clamav_available and self.enable_security_scan:
@@ -214,13 +440,21 @@ class UnifiedFileProcessor:
         """
         try:
             path = Path(filepath)
+<<<<<<< Updated upstream
             self._check_path_traversal_attempts(filepath)
             resolved_path = self._validate_path_existence(path, filepath)
             self._validate_path_within_allowed_directories(resolved_path, filepath)
+=======
+            self._check_path_traversal(filepath)
+            resolved_path = path.resolve()
+            self._check_path_exists_and_file(resolved_path, filepath)
+            if not self._is_path_allowed(resolved_path):
+                raise PathValidationError(
+                    f"File path outside allowed directories: {filepath}"
+                )
+>>>>>>> Stashed changes
             self.logger.debug(f"Path validation passed for: {filepath}")
-
         except PathValidationError:
-            # Re-raise PathValidationError as-is
             raise
         except Exception as e:
             self.logger.error(f"Path validation failed for {filepath}: {e}")
@@ -391,6 +625,7 @@ class UnifiedFileProcessor:
         try:
             self.logger.info(f"Security scanning file: {filepath}")
             result = self._run_clamav_scan(filepath)
+<<<<<<< Updated upstream
             return self._process_scan_result(result, filepath)
 
         except subprocess.TimeoutExpired:
@@ -482,6 +717,20 @@ class UnifiedFileProcessor:
             )
         else:
             return SecurityScanResult(True)  # Assume clean on error (fail-open)
+=======
+            return self._handle_clamav_result(result, filepath)
+        except subprocess.TimeoutExpired:
+            self.logger.error(f"Security scan timeout for file: {filepath}")
+            if self.fail_closed:
+                self.logger.warning(f"Scan timeout, failing closed for: {filepath}")
+                return SecurityScanResult(
+                    False, "ScanTimeout", "Security scan timed out"
+                )
+            else:
+                return SecurityScanResult(True)
+        except Exception as e:
+            return self._handle_scan_exception(e, filepath)
+>>>>>>> Stashed changes
 
     def _quarantine_file(
         self, filepath: str, scan_result: SecurityScanResult
@@ -539,10 +788,9 @@ class UnifiedFileProcessor:
         """
         try:
             self.logger.info(f"Processing archive with bomb protection: {filepath}")
-
-            # Create temporary extraction directory
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_path = Path(temp_dir)
+<<<<<<< Updated upstream
                 
                 # Extract archive with protection
                 try:
@@ -563,6 +811,31 @@ class UnifiedFileProcessor:
                     filepath, extracted_files, validation_result
                 )
 
+=======
+                ok, result_or_error = self._extract_and_validate_archive(
+                    filepath, temp_path
+                )
+                if not ok:
+                    if isinstance(result_or_error, SecurityScanResult):
+                        return self._quarantine_file(filepath, result_or_error)
+                    else:
+                        return ProcessingResult(False, error=result_or_error)
+                try:
+                    file_count, total_extracted_size = (
+                        self._count_and_validate_extracted_files(temp_path)
+                    )
+                except ArchiveBombError as e:
+                    self.logger.warning(f"Archive bomb detected: {filepath} - {e}")
+                    scan_result = SecurityScanResult(False, "ArchiveBomb", str(e))
+                    return self._quarantine_file(filepath, scan_result)
+                self.logger.info(
+                    f"Archive extraction completed safely: {file_count} files, {total_extracted_size} bytes"
+                )
+                extracted_files = self._recursively_process_extracted_files(temp_path)
+                return self._finalize_archive_processing(
+                    filepath, extracted_files, total_extracted_size, file_count
+                )
+>>>>>>> Stashed changes
         except ArchiveBombError as e:
             return self._handle_archive_bomb(filepath, e)
         except Exception as e:
@@ -670,10 +943,11 @@ class UnifiedFileProcessor:
         return self._quarantine_file(filepath, scan_result)
 
     def _extract_zip_with_protection(self, filepath: str, extract_path: Path) -> None:
-        """Extract ZIP file with bomb protection."""
+        """Extract ZIP file with bomb protection and safe extraction."""
         with zipfile.ZipFile(filepath, "r") as zip_ref:
             total_size = 0
             file_count = 0
+            safe_members = []
 
             # Check archive contents before extraction
             for info in zip_ref.infolist():
@@ -696,14 +970,19 @@ class UnifiedFileProcessor:
                         f"ZIP member size {info.file_size} exceeds limit"
                     )
 
-            # Safe extraction
-            zip_ref.extractall(extract_path)
+                # Only allow safe members
+                safe_members.append(info)
+
+            # Safe extraction: only extract safe members
+            for member in safe_members:
+                zip_ref.extract(member, extract_path)
 
     def _extract_tar_with_protection(self, filepath: str, extract_path: Path) -> None:
-        """Extract TAR file with bomb protection."""
+        """Extract TAR file with bomb protection and safe extraction."""
         with tarfile.open(filepath, "r:*") as tar_ref:
             total_size = 0
             file_count = 0
+            safe_members = []
 
             # Check archive contents before extraction
             for member in tar_ref.getmembers():
@@ -729,8 +1008,11 @@ class UnifiedFileProcessor:
                             f"TAR member size {member.size} exceeds limit"
                         )
 
-            # Safe extraction
-            tar_ref.extractall(extract_path)
+                # Only allow safe members
+                safe_members.append(member)
+
+            # Safe extraction: only extract safe members
+            tar_ref.extractall(extract_path, members=safe_members)
 
     def _validate_extracted_file_path(
         self, filepath: str, extraction_root: Path
@@ -768,9 +1050,9 @@ class UnifiedFileProcessor:
         """
         if not TESSERACT_AVAILABLE:
             return None
-
         try:
             self.logger.info(f"Extracting OCR metadata from: {filepath}")
+<<<<<<< Updated upstream
             
             images = self._load_images_from_file(filepath)
             if not images:
@@ -784,11 +1066,19 @@ class UnifiedFileProcessor:
             metadata.text = "\n".join(all_text)
             
             # Extract structured metadata from text
+=======
+            metadata = OCRMetadata()
+            images = self._get_images_for_ocr(filepath)
+            if not images:
+                return None
+            all_text = self._perform_ocr_on_images(images)
+            if not all_text:
+                return None
+            metadata.text = self._combine_ocr_texts(all_text)
+>>>>>>> Stashed changes
             self._extract_structured_metadata(metadata)
-
             self.logger.info(f"OCR metadata extraction complete for: {filepath}")
             return metadata
-
         except Exception as e:
             self.logger.error(f"OCR metadata extraction failed for {filepath}: {e}")
             return None
@@ -836,6 +1126,7 @@ class UnifiedFileProcessor:
             metadata: OCRMetadata object to populate
         """
         text = metadata.text.lower()
+<<<<<<< Updated upstream
 
         # Extract different types of structured data
         metadata.date_detected = self._extract_date_from_text(text)
@@ -896,11 +1187,14 @@ class UnifiedFileProcessor:
 
     def _extract_business_context_from_text(self, text: str):
         """Extract business context keywords from text."""
+=======
+>>>>>>> Stashed changes
         business_keywords = [
             "invoice", "receipt", "contract", "agreement", "proposal",
             "statement", "bill", "purchase", "order", "delivery",
             "payment", "quote", "estimate",
         ]
+<<<<<<< Updated upstream
 
         for keyword in business_keywords:
             if keyword in text:
@@ -917,6 +1211,14 @@ class UnifiedFileProcessor:
         if metadata.business_context:
             confidence += 0.3
         return confidence
+=======
+        metadata.date_detected = self._extract_date_from_text(text)
+        metadata.sender = self._extract_sender_from_text(text)
+        metadata.business_context = self._extract_business_context_from_text(
+            text, business_keywords
+        )
+        metadata.confidence = self._calculate_confidence(metadata)
+>>>>>>> Stashed changes
 
     def _organize_file(
         self, filepath: str, category: str, ocr_metadata: Optional[OCRMetadata] = None

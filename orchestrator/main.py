@@ -1,13 +1,10 @@
 """
 Main entry point for SecureDownloadsOrchestrator 2.0+
-
 Loads configuration, sets up logging, and manages application startup.
 """
-
 import sys
 import time
 from pathlib import Path
-
 from orchestrator.classifier import classify_file
 from orchestrator.config_loader import load_config
 from orchestrator.file_watcher import FileWatcher
@@ -15,30 +12,23 @@ from orchestrator.logger import log_shutdown_info, log_startup_info, setup_logge
 from orchestrator.pipeline import create_unified_processor
 
 
-def create_directories(config: dict, logger) -> bool:
-    directories = config.get("directories", {})
-    for kind, path in directories.items():
-        if path:
-            dir_path = Path(path)
-            try:
-                dir_path.mkdir(parents=True, exist_ok=True)
-                logger.info(f"Directory ready: {kind} -> {dir_path}")
-            except Exception as e:
-                logger.error(f"Failed to create directory {kind} ({dir_path}): {e}")
-                return False
-
-    # Create category destination dirs
-    categories = config.get("categories", {})
-    base_dest = directories.get("destination", "")
-    if base_dest:
-        for cat, cat_cfg in categories.items():
-            dest_dir = Path(base_dest) / cat_cfg.get("destination", cat)
-            try:
-                dest_dir.mkdir(parents=True, exist_ok=True)
-                logger.debug(f"Category directory ready: {cat} -> {dest_dir}")
-            except Exception as e:
-                logger.warning(f"Failed to create category directory {cat}: {e}")
-    return True
+def _load_and_validate_config():
+    config_file = sys.argv[1] if len(sys.argv) > 1 else "config.yaml"
+    config = load_config(config_file)
+    logger = setup_logger("orchestrator", config.get("logging", {}))
+    app_cfg = config.get("application", {})
+    log_startup_info(logger, app_cfg)
+    startup_cfg = app_cfg.get("startup", {})
+    if startup_cfg.get("validate_config", True):
+        if not validate_configuration(config, logger):
+            logger.error("Configuration validation failed. Exiting.")
+            sys.exit(1)
+    if startup_cfg.get("create_missing_dirs", True):
+        if not create_directories(config, logger):
+            logger.error("Failed to create required directories. Exiting.")
+            sys.exit(1)
+    display_configuration_summary(config, logger)
+    return config, logger
 
 
 def display_configuration_summary(config: dict, logger):
@@ -128,15 +118,75 @@ def handle_new_file(filepath, logger, config=None):
         logger.error(f"Error during file processing: {e}")
 
 
+def create_directories(config: dict, logger) -> bool:
+    directories = config.get("directories", {})
+    for kind, path in directories.items():
+        if path:
+            dir_path = Path(path)
+            try:
+                dir_path.mkdir(parents=True, exist_ok=True)
+                logger.info(f"Directory ready: {kind} -> {dir_path}")
+            except Exception as e:
+                logger.error(f"Failed to create directory {kind} ({dir_path}): {e}")
+                return False
+
+    # Create category destination dirs
+    categories = config.get("categories", {})
+    base_dest = directories.get("destination", "")
+    if base_dest:
+        for cat, cat_cfg in categories.items():
+            dest_dir = Path(base_dest) / cat_cfg.get("destination", cat)
+            try:
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                logger.debug(f"Category directory ready: {cat} -> {dest_dir}")
+            except Exception as e:
+                logger.warning(f"Failed to create category directory {cat}: {e}")
+    return True
+
+
+def _initialize_file_watcher(config, logger):
+    source_dir = config.get("directories", {}).get("source")
+    if source_dir:
+        logger.info("Initializing file monitoring service...")
+
+        def file_callback(filepath):
+            handle_new_file(filepath, logger, config)
+
+        watcher = FileWatcher(source_dir, file_callback, logger)
+        watcher.start()
+        logger.info("File monitoring service started successfully")
+        return watcher
+    else:
+        logger.warning("No source directory configured - file monitoring disabled")
+        return None
+
+
+def _main_loop(logger):
+    logger.info("SecureDownloadsOrchestrator initialized successfully")
+    logger.info("Ready for modular expansion...")
+    logger.info("Current status: Foundation complete - file monitoring active")
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        logger.info("Received shutdown signal...")
+
+
 def main():
     watcher = None
     try:
+<<<<<<< Updated upstream
         config, logger = _initialize_application()
         _validate_and_setup_directories(config, logger)
         watcher = _setup_file_monitoring(config, logger)
         _log_startup_completion(logger)
         _run_main_loop(logger)
 
+=======
+        config, logger = _load_and_validate_config()
+        watcher = _initialize_file_watcher(config, logger)
+        _main_loop(logger)
+>>>>>>> Stashed changes
     except FileNotFoundError as e:
         print(f"Error: {e}")
         print("Make sure config.yaml exists in the project root directory.")
