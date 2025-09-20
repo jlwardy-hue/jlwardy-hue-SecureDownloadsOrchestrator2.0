@@ -247,12 +247,35 @@ class SetupManager:
                 self.issues.append(
                     f"Config missing sections: {', '.join(missing_sections)}"
                 )
+                self._provide_configuration_guidance(missing_sections)
                 return False
 
-            # Check directories configuration
+            # Check directories configuration with detailed validation
             dirs = config.get("directories", {})
-            if not dirs.get("source") or not dirs.get("destination"):
-                self.issues.append("Config missing source or destination directory")
+            config_issues = []
+            
+            if not dirs:
+                config_issues.append("The 'directories' section is empty or null")
+            else:
+                source = dirs.get("source")
+                destination = dirs.get("destination")
+                
+                if not source:
+                    if "source" not in dirs:
+                        config_issues.append("Missing 'source' directory in directories section")
+                    else:
+                        config_issues.append("The 'source' directory is empty or null")
+                        
+                if not destination:
+                    if "destination" not in dirs:
+                        config_issues.append("Missing 'destination' directory in directories section")
+                    else:
+                        config_issues.append("The 'destination' directory is empty or null")
+            
+            if config_issues:
+                for issue in config_issues:
+                    self.issues.append(issue)
+                self._provide_directories_guidance()
                 return False
 
             self.print_status("Configuration file valid ✓", "SUCCESS")
@@ -261,7 +284,63 @@ class SetupManager:
 
         except Exception as e:
             self.issues.append(f"Configuration error: {e}")
+            self._provide_yaml_syntax_guidance()
             return False
+
+    def _provide_configuration_guidance(self, missing_sections):
+        """Provide guidance for missing configuration sections."""
+        self.print_status("\n🔧 CONFIGURATION FIX NEEDED:", "ERROR", bold=True)
+        self.print_status("Your config.yaml is missing required sections.", "ERROR")
+        self.print_status("Add the following sections to your config.yaml:", "INFO")
+        
+        for section in missing_sections:
+            if section == "directories":
+                self.print_status("  directories:", "INFO")
+                self.print_status("    source: \"/path/to/source/directory\"", "INFO")
+                self.print_status("    destination: \"/path/to/destination/directory\"", "INFO")
+            elif section == "categories":
+                self.print_status("  categories:", "INFO")
+                self.print_status("    documents:", "INFO")
+                self.print_status("      extensions: [\".pdf\", \".doc\", \".txt\"]", "INFO")
+                self.print_status("      destination: \"documents\"", "INFO")
+            elif section == "logging":
+                self.print_status("  logging:", "INFO")
+                self.print_status("    console:", "INFO")
+                self.print_status("      enabled: true", "INFO")
+                self.print_status("      level: \"INFO\"", "INFO")
+            elif section == "application":
+                self.print_status("  application:", "INFO")
+                self.print_status("    name: \"SecureDownloadsOrchestrator\"", "INFO")
+                self.print_status("    version: \"2.0\"", "INFO")
+
+    def _provide_directories_guidance(self):
+        """Provide specific guidance for directories configuration issues."""
+        self.print_status("\n🔧 DIRECTORIES FIX NEEDED:", "ERROR", bold=True)
+        self.print_status("Your directories configuration needs attention.", "ERROR")
+        self.print_status("Ensure your config.yaml has this structure:", "INFO")
+        self.print_status("", "INFO")
+        self.print_status("directories:", "INFO")
+        self.print_status("  source: \"/path/to/source/directory\"      # Directory to monitor", "INFO")
+        self.print_status("  destination: \"/path/to/destination\"      # Where to organize files", "INFO")
+        self.print_status("", "INFO")
+        self.print_status("Example paths:", "INFO")
+        self.print_status("  source: \"/tmp/test_watch\"                # For testing", "INFO")
+        self.print_status("  destination: \"/tmp/test_dest\"            # For testing", "INFO")
+        self.print_status("  source: \"/home/user/Downloads\"           # Real use case", "INFO")
+        self.print_status("  destination: \"/home/user/Organized\"      # Real use case", "INFO")
+
+    def _provide_yaml_syntax_guidance(self):
+        """Provide guidance for YAML syntax errors."""
+        self.print_status("\n🔧 YAML SYNTAX FIX NEEDED:", "ERROR", bold=True)
+        self.print_status("There appears to be a YAML syntax error in config.yaml.", "ERROR")
+        self.print_status("Common YAML syntax issues:", "INFO")
+        self.print_status("  • Missing colons after keys", "INFO")
+        self.print_status("  • Incorrect indentation (use spaces, not tabs)", "INFO")
+        self.print_status("  • Unclosed brackets or quotes", "INFO")
+        self.print_status("  • Missing spaces after colons", "INFO")
+        self.print_status("", "INFO")
+        self.print_status("You can validate YAML syntax with:", "INFO")
+        self.print_status("  python -c \"import yaml; yaml.safe_load(open('config.yaml'))\"", "INFO")
 
     def check_git_health(self) -> bool:
         """Check Git repository health for common issues."""
