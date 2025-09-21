@@ -75,8 +75,11 @@ class OCRMetadata:
     def __init__(self):
         self.text: str = ""
         self.date_detected: Optional[datetime] = None
+        self.time_detected: Optional[str] = None
         self.sender: Optional[str] = None
+        self.location: Optional[str] = None
         self.business_context: Optional[str] = None
+        self.subject: Optional[str] = None
         self.confidence: float = 0.0
 
 
@@ -439,20 +442,13 @@ class UnifiedFileProcessor:
             PathValidationError: If path validation fails
         """
         try:
-            path = Path(filepath)
-<<<<<<< Updated upstream
-            self._check_path_traversal_attempts(filepath)
-            resolved_path = self._validate_path_existence(path, filepath)
-            self._validate_path_within_allowed_directories(resolved_path, filepath)
-=======
             self._check_path_traversal(filepath)
-            resolved_path = path.resolve()
+            resolved_path = Path(filepath).resolve()
             self._check_path_exists_and_file(resolved_path, filepath)
             if not self._is_path_allowed(resolved_path):
                 raise PathValidationError(
                     f"File path outside allowed directories: {filepath}"
                 )
->>>>>>> Stashed changes
             self.logger.debug(f"Path validation passed for: {filepath}")
         except PathValidationError:
             raise
@@ -625,99 +621,6 @@ class UnifiedFileProcessor:
         try:
             self.logger.info(f"Security scanning file: {filepath}")
             result = self._run_clamav_scan(filepath)
-<<<<<<< Updated upstream
-            return self._process_scan_result(result, filepath)
-
-        except subprocess.TimeoutExpired:
-            return self._handle_scan_timeout(filepath)
-        except Exception as e:
-            return self._handle_scan_exception(filepath, e)
-
-    def _handle_clamav_unavailable(self, filepath: str) -> SecurityScanResult:
-        """Handle case when ClamAV is not available."""
-        if self.fail_closed:
-            self.logger.warning(
-                f"ClamAV not available, failing closed for: {filepath}"
-            )
-            return SecurityScanResult(
-                False, "AVUnavailable", "Antivirus scanner not available"
-            )
-        else:
-            self.logger.debug(
-                "ClamAV not available, assuming clean (fail-open mode)"
-            )
-            return SecurityScanResult(True)
-
-    def _run_clamav_scan(self, filepath: str):
-        """Run ClamAV scan and return result."""
-        return subprocess.run(
-            ["clamscan", "--no-summary", filepath],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-
-    def _process_scan_result(self, result, filepath: str) -> SecurityScanResult:
-        """Process ClamAV scan result."""
-        output = result.stdout + result.stderr
-
-        # ClamAV returns 0 for clean files, 1 for infected files
-        if result.returncode == 0:
-            self.logger.info(f"Security scan clean: {filepath}")
-            return SecurityScanResult(True, scan_output=output)
-        elif result.returncode == 1:
-            return self._handle_threat_detected(output, filepath)
-        else:
-            return self._handle_scan_error(output, filepath)
-
-    def _handle_threat_detected(self, output: str, filepath: str) -> SecurityScanResult:
-        """Handle detected security threat."""
-        # Extract threat name from output
-        threat_match = re.search(r": (.+) FOUND", output)
-        threat_name = (
-            threat_match.group(1) if threat_match else "Unknown threat"
-        )
-
-        self.logger.warning(
-            f"Security threat detected in {filepath}: {threat_name}"
-        )
-        return SecurityScanResult(False, threat_name, output)
-
-    def _handle_scan_error(self, output: str, filepath: str) -> SecurityScanResult:
-        """Handle scan error."""
-        self.logger.error(f"ClamAV scan error for {filepath}: {output}")
-        if self.fail_closed:
-            self.logger.warning(f"Scan error, failing closed for: {filepath}")
-            return SecurityScanResult(
-                False, "ScanError", f"Scan error: {output}"
-            )
-        else:
-            return SecurityScanResult(
-                True
-            )  # Assume clean on scan error (fail-open)
-
-    def _handle_scan_timeout(self, filepath: str) -> SecurityScanResult:
-        """Handle scan timeout."""
-        self.logger.error(f"Security scan timeout for file: {filepath}")
-        if self.fail_closed:
-            self.logger.warning(f"Scan timeout, failing closed for: {filepath}")
-            return SecurityScanResult(
-                False, "ScanTimeout", "Security scan timed out"
-            )
-        else:
-            return SecurityScanResult(True)  # Assume clean on timeout (fail-open)
-
-    def _handle_scan_exception(self, filepath: str, e: Exception) -> SecurityScanResult:
-        """Handle scan exception."""
-        self.logger.error(f"Security scan error for {filepath}: {e}")
-        if self.fail_closed:
-            self.logger.warning(f"Scan exception, failing closed for: {filepath}")
-            return SecurityScanResult(
-                False, "ScanException", f"Scan exception: {e}"
-            )
-        else:
-            return SecurityScanResult(True)  # Assume clean on error (fail-open)
-=======
             return self._handle_clamav_result(result, filepath)
         except subprocess.TimeoutExpired:
             self.logger.error(f"Security scan timeout for file: {filepath}")
@@ -730,7 +633,6 @@ class UnifiedFileProcessor:
                 return SecurityScanResult(True)
         except Exception as e:
             return self._handle_scan_exception(e, filepath)
->>>>>>> Stashed changes
 
     def _quarantine_file(
         self, filepath: str, scan_result: SecurityScanResult
@@ -790,28 +692,7 @@ class UnifiedFileProcessor:
             self.logger.info(f"Processing archive with bomb protection: {filepath}")
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_path = Path(temp_dir)
-<<<<<<< Updated upstream
                 
-                # Extract archive with protection
-                try:
-                    self._extract_archive_safely(filepath, temp_path)
-                except ArchiveBombError as e:
-                    return self._handle_archive_bomb(filepath, e)
-
-                # Validate extracted content
-                validation_result = self._validate_extracted_content(temp_path)
-                if not validation_result["success"]:
-                    raise ArchiveBombError(validation_result["error"])
-
-                # Process extracted files
-                extracted_files = self._process_extracted_files(temp_path)
-                
-                # Move original archive and return result
-                return self._finalize_archive_processing(
-                    filepath, extracted_files, validation_result
-                )
-
-=======
                 ok, result_or_error = self._extract_and_validate_archive(
                     filepath, temp_path
                 )
@@ -835,7 +716,6 @@ class UnifiedFileProcessor:
                 return self._finalize_archive_processing(
                     filepath, extracted_files, total_extracted_size, file_count
                 )
->>>>>>> Stashed changes
         except ArchiveBombError as e:
             return self._handle_archive_bomb(filepath, e)
         except Exception as e:
@@ -1052,21 +932,6 @@ class UnifiedFileProcessor:
             return None
         try:
             self.logger.info(f"Extracting OCR metadata from: {filepath}")
-<<<<<<< Updated upstream
-            
-            images = self._load_images_from_file(filepath)
-            if not images:
-                return None
-            
-            all_text = self._extract_text_from_images(images)
-            if not all_text:
-                return None
-
-            metadata = OCRMetadata()
-            metadata.text = "\n".join(all_text)
-            
-            # Extract structured metadata from text
-=======
             metadata = OCRMetadata()
             images = self._get_images_for_ocr(filepath)
             if not images:
@@ -1075,8 +940,7 @@ class UnifiedFileProcessor:
             if not all_text:
                 return None
             metadata.text = self._combine_ocr_texts(all_text)
->>>>>>> Stashed changes
-            self._extract_structured_metadata(metadata)
+            self._extract_structured_metadata(metadata, filepath)
             self.logger.info(f"OCR metadata extraction complete for: {filepath}")
             return metadata
         except Exception as e:
@@ -1126,15 +990,52 @@ class UnifiedFileProcessor:
             metadata: OCRMetadata object to populate
         """
         text = metadata.text.lower()
-<<<<<<< Updated upstream
-
-        # Extract different types of structured data
+        business_keywords = [
+            "invoice", "receipt", "contract", "agreement", "proposal",
+            "statement", "bill", "purchase", "order", "delivery",
+            "payment", "quote", "estimate",
+        ]
         metadata.date_detected = self._extract_date_from_text(text)
+        metadata.time_detected = self._extract_time_from_text(text)
         metadata.sender = self._extract_sender_from_text(text)
-        metadata.business_context = self._extract_business_context_from_text(text)
-        
-        # Calculate confidence based on extracted information
-        metadata.confidence = self._calculate_metadata_confidence(metadata)
+        metadata.location = self._extract_location_from_text(text)
+        metadata.business_context = self._extract_business_context_from_text(text, business_keywords)
+        metadata.subject = self._extract_subject_from_text(text)
+        metadata.confidence = self._calculate_confidence(metadata)
+
+    def _extract_time_from_text(self, text: str):
+        time_patterns = [
+            r"\b([01]?\d|2[0-3]):[0-5]\d(:[0-5]\d)?\b",  # HH:MM or HH:MM:SS
+            r"\b([01]?\d|2[0-3])h[0-5]\d\b",  # HHhMM
+        ]
+        for pattern in time_patterns:
+            match = re.search(pattern, text)
+            if match:
+                return match.group(0)
+        return None
+
+    def _extract_location_from_text(self, text: str):
+        # Look for 'location: ...' or common city/state/country patterns
+        location_patterns = [
+            r"location[:\s]+([a-zA-Z\s,]+)",
+            r"city[:\s]+([a-zA-Z\s,]+)",
+            r"in ([a-zA-Z\s,]+)",
+        ]
+        for pattern in location_patterns:
+            match = re.search(pattern, text)
+            if match:
+                return match.group(1).strip()
+        return None
+
+    def _extract_subject_from_text(self, text: str):
+        subject_patterns = [
+            r"subject[:\s]+(.+)",
+        ]
+        for pattern in subject_patterns:
+            match = re.search(pattern, text)
+            if match:
+                return match.group(1).strip()
+        return None
 
     def _extract_date_from_text(self, text: str):
         """Extract date information from text."""
@@ -1185,24 +1086,13 @@ class UnifiedFileProcessor:
                 return match.group(1).strip()
         return None
 
-    def _extract_business_context_from_text(self, text: str):
-        """Extract business context keywords from text."""
-=======
->>>>>>> Stashed changes
-        business_keywords = [
-            "invoice", "receipt", "contract", "agreement", "proposal",
-            "statement", "bill", "purchase", "order", "delivery",
-            "payment", "quote", "estimate",
-        ]
-<<<<<<< Updated upstream
-
+    def _extract_business_context_from_text(self, text: str, business_keywords):
         for keyword in business_keywords:
             if keyword in text:
                 return keyword
         return None
 
-    def _calculate_metadata_confidence(self, metadata: OCRMetadata) -> float:
-        """Calculate confidence score based on extracted metadata."""
+    def _calculate_confidence(self, metadata: OCRMetadata) -> float:
         confidence = 0.0
         if metadata.date_detected:
             confidence += 0.3
@@ -1211,20 +1101,12 @@ class UnifiedFileProcessor:
         if metadata.business_context:
             confidence += 0.3
         return confidence
-=======
-        metadata.date_detected = self._extract_date_from_text(text)
-        metadata.sender = self._extract_sender_from_text(text)
-        metadata.business_context = self._extract_business_context_from_text(
-            text, business_keywords
-        )
-        metadata.confidence = self._calculate_confidence(metadata)
->>>>>>> Stashed changes
 
     def _organize_file(
         self, filepath: str, category: str, ocr_metadata: Optional[OCRMetadata] = None
     ) -> str:
         """
-        Organize file into the appropriate destination directory.
+        Organize file into the appropriate destination directory, dynamically creating folders for all detected metadata (topic, sender, date, time, location, subject, etc).
 
         Args:
             filepath: Source file path
@@ -1257,23 +1139,29 @@ class UnifiedFileProcessor:
             category_config = categories.get(config_category, {})
             base_dest = category_config.get("destination", category)
 
-            # Build intelligent directory structure
+            # Build directory structure from all available metadata
             dest_parts = [base_dest]
-
-            # Add date-based organization if available
-            if ocr_metadata and ocr_metadata.date_detected:
-                date_str = ocr_metadata.date_detected.strftime("%Y/%m")
-                dest_parts.append(date_str)
-
-            # Add business context if available
-            if ocr_metadata and ocr_metadata.business_context:
-                dest_parts.append(ocr_metadata.business_context)
-
-            # Add sender information if available
-            if ocr_metadata and ocr_metadata.sender:
-                # Clean sender name for filesystem
-                clean_sender = re.sub(r'[<>:"/\\|?*]', "_", ocr_metadata.sender[:50])
-                dest_parts.append(clean_sender)
+            if ocr_metadata:
+                # Add business context/topic
+                if getattr(ocr_metadata, "business_context", None):
+                    dest_parts.append(ocr_metadata.business_context.strip().replace(" ", "_"))
+                # Add subject
+                if getattr(ocr_metadata, "subject", None):
+                    dest_parts.append(ocr_metadata.subject.strip().replace(" ", "_"))
+                # Add date
+                if getattr(ocr_metadata, "date_detected", None):
+                    date_str = ocr_metadata.date_detected.strftime("%Y-%m-%d")
+                    dest_parts.append(date_str)
+                # Add time
+                if getattr(ocr_metadata, "time_detected", None):
+                    dest_parts.append(ocr_metadata.time_detected.replace(":", "-"))
+                # Add location
+                if getattr(ocr_metadata, "location", None):
+                    dest_parts.append(ocr_metadata.location.strip().replace(" ", "_"))
+                # Add sender
+                if getattr(ocr_metadata, "sender", None):
+                    clean_sender = re.sub(r'[<>:"/\\|?*]', "_", ocr_metadata.sender[:50])
+                    dest_parts.append(clean_sender)
 
             # Construct final destination path
             final_dest_dir = self.destination_dir / Path(*dest_parts)
@@ -1302,7 +1190,6 @@ class UnifiedFileProcessor:
             self.logger.error(f"Failed to organize file {filepath}: {e}")
             # Fallback: move to category directory with original name
             try:
-                # Recompute destination directory as in main logic
                 category_config = self.config.get("categories", {}).get(category, {})
                 fallback_base_dest = category_config.get("destination", category)
                 fallback_dest = self.destination_dir / fallback_base_dest / filename

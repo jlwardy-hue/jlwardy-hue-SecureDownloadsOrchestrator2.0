@@ -175,18 +175,9 @@ def _main_loop(logger):
 def main():
     watcher = None
     try:
-<<<<<<< Updated upstream
-        config, logger = _initialize_application()
-        _validate_and_setup_directories(config, logger)
-        watcher = _setup_file_monitoring(config, logger)
-        _log_startup_completion(logger)
-        _run_main_loop(logger)
-
-=======
         config, logger = _load_and_validate_config()
         watcher = _initialize_file_watcher(config, logger)
         _main_loop(logger)
->>>>>>> Stashed changes
     except FileNotFoundError as e:
         print(f"Error: {e}")
         print("Make sure config.yaml exists in the project root directory.")

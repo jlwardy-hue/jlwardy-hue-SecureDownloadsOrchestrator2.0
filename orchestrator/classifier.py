@@ -407,7 +407,6 @@ class FileClassifier:
                     "image",
                     "audio",
                     "video",
-                    "archive",
                     "code",
                     "executable",
                     "pdf",
@@ -749,91 +748,11 @@ class FileClassifier:
         Returns:
             Dictionary containing results from all applied skills
         """
-        if not self._validate_ai_analysis_preconditions(filepath):
-            return {}
-            
-        skills = self._determine_skills_to_apply(filepath, skills)
-        if not skills:
-            return {}
-            
-        content = self._extract_file_content_for_ai(filepath)
-        if not content:
-            return {}
-            
-        return self._apply_ai_skills(filepath, content, skills)
-
-    def _validate_ai_analysis_preconditions(self, filepath: str) -> bool:
-        """Validate preconditions for AI analysis."""
-        if not os.path.isfile(filepath):
-            self.logger.warning(f"Cannot analyze non-existent file: {filepath}")
-<<<<<<< Updated upstream
-            return False
-            
-        if not self._ai_enabled:
-            self.logger.debug("AI analysis requested but AI is not enabled")
-            return False
-            
-        return True
-
-    def _determine_skills_to_apply(self, filepath: str, skills: Optional[List[str]]) -> List[str]:
-        """Determine which AI skills to apply to the file."""
-        if skills is not None:
-            return skills
-            
-        # Use all enabled skills
-        ai_config = self.config.get("ai_classification", {})
-        skills_config = ai_config.get("skills", {})
-        enabled_skills = [skill for skill, config in skills_config.items()
-                          if config.get("enabled", False)]
-        
-        if not enabled_skills:
-            self.logger.debug(f"No AI skills enabled for file analysis: {filepath}")
-            
-        return enabled_skills
-
-    def _extract_file_content_for_ai(self, filepath: str) -> Optional[str]:
-        """Extract readable content from file for AI analysis."""
-        content = None
-        
-        # First try to read as text
-        if self._is_text_file(filepath):
-            content = self._read_file_content(filepath)
-        
-        # If text reading failed, try OCR if enabled
-        if not content and self._should_use_ocr_for_file(filepath):
-            self.logger.info(f"Attempting OCR text extraction for {filepath}")
-            content = self._extract_text_with_ocr(filepath)
-            
-        if not content:
-            self.logger.warning(
-                f"No readable content found for AI analysis: {filepath}. "
-                "File may be binary or OCR unavailable."
-            )
-            
-        return content
-
-    def _apply_ai_skills(self, filepath: str, content: str, skills: List[str]) -> Dict[str, Any]:
-        """Apply AI skills to extracted content."""
-        results = {}
-        
-        try:
-            for skill in skills:
-                try:
-                    skill_result = self._call_ai_skill(skill, filepath, content)
-                    if skill_result:
-                        results[skill] = skill_result
-                    else:
-                        results[skill] = {"error": f"AI {skill} failed or returned invalid response"}
-                        
-                except Exception as e:
-                    self.logger.error(f"Error applying AI skill '{skill}' to {filepath}: {e}")
-                    results[skill] = {"error": str(e)}
-                    
-=======
-            return {}
-
-        if not self._ai_enabled:
-            self.logger.debug("AI analysis requested but AI is not enabled")
+        if not self._ai_enabled or not os.path.isfile(filepath):
+            if not os.path.isfile(filepath):
+                self.logger.warning(f"Cannot analyze non-existent file: {filepath}")
+            if not self._ai_enabled:
+                self.logger.debug("AI analysis requested but AI is not enabled")
             return {}
 
         try:
@@ -851,7 +770,6 @@ class FileClassifier:
                 return {}
 
             results = self._apply_ai_skills(selected_skills, filepath, content)
->>>>>>> Stashed changes
             self.logger.info(
                 f"AI analysis completed for {filepath}. "
                 f"Applied {len(selected_skills)} skills, {len([r for r in results.values() if 'error' not in r])} successful."
